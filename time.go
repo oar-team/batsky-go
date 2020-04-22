@@ -73,7 +73,7 @@
 // clock reading if present. If t != u because of different monotonic clock readings,
 // that difference will be visible when printing t.String() and u.String().
 //
-package batsky
+package batsky_time
 
 import (
 	"errors"

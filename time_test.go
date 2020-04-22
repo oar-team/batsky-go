@@ -1,4 +1,4 @@
-package batsky
+package batsky_time
 
 import "fmt"
 import "testing"
