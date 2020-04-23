@@ -77,6 +77,7 @@ package batsky_time
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	_ "unsafe" // for go:linkname
 
@@ -1027,6 +1028,7 @@ var requester *zmq.Socket
 // Provided by package runtime.
 func now() (sec int64, nsec int32, mono int64) {
 	if requester == nil {
+		fmt.Println("creating new request socket in time.go")
 		requester, _ = zmq.NewSocket(zmq.REQ)
 		requester.Connect("tcp://127.0.0.1:27000")
 	}
