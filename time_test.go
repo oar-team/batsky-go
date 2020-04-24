@@ -1,7 +1,9 @@
-package batsky_time
+package batskytime
 
-import "fmt"
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestHello(t *testing.T) {
 	fmt.Println(Now())

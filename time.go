@@ -73,7 +73,7 @@
 // clock reading if present. If t != u because of different monotonic clock readings,
 // that difference will be visible when printing t.String() and u.String().
 //
-package batsky_time
+package batskytime
 
 import (
 	"errors"
@@ -1046,7 +1046,8 @@ func now() (sec int64, nsec int32, mono int64) {
 
 // runtimeNano returns the current value of the runtime clock in nanoseconds.
 func runtimeNano() int64 {
-	return 20
+	sec, _, _ := now()
+	return sec * 1e9
 }
 
 // Monotonic times are reported as offsets from startNano.

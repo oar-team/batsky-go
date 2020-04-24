@@ -4,7 +4,7 @@
 
 // +build aix darwin dragonfly freebsd js,wasm linux netbsd openbsd solaris
 
-package batsky_time
+package batskytime
 
 import (
 	"errors"
