@@ -36,7 +36,7 @@ func TestMultipleRoutinesDelayed(t *testing.T) {
 			defer wg.Done()
 			fmt.Println(Now())
 		}(&wg, i)
-		time.Sleep(20 * time.Millisecond)
+		time.Sleep(300 * time.Millisecond)
 	}
 	wg.Wait()
 }

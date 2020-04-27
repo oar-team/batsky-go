@@ -3,7 +3,7 @@ package requester
 import (
 	"encoding/json"
 	"fmt"
-	realtime "time"
+	"strconv"
 
 	zmq "github.com/pebbe/zmq4"
 )
@@ -30,7 +30,7 @@ var done = make(chan bool)
 
 var reqSocket *zmq.Socket
 
-var sending bool
+var running bool
 
 func RequestTime() int64 {
 	m := &Message{
@@ -38,10 +38,8 @@ func RequestTime() int64 {
 		Data:        "",
 	}
 	r := send(m)
-	if r != m {
-		fmt.Printf("Expected %p, found %p\n", m, r)
-	}
-	return 0
+	t, _ := strconv.Atoi(r.Data)
+	return int64(t)
 }
 
 func RequestTimer(durationSeconds int64) {
@@ -59,76 +57,69 @@ func send(m *Message) *Message {
 	// Could it be that two tests happen at the exact same time thus
 	// calling run() twice?
 	// TODO secure run() call?
-	var r *Message
 	fmt.Println("send")
-	if sending {
-		req <- m
-		r = <-res
-	} else {
-		// If doSend is not running yet, this call has the
-		// responsibility of running it and waiting for it to end
-		// We have to check here when all res have be sent so as not
-		// to call another instance of it.
-		sending = true
-		go doSend()
-		req <- m
-		r = <-res
-		<-done
-		sending = false
+	if !running {
+		go run()
 	}
-	return r
+	req <- m
+	return <-res
 }
 
-func doSend() {
+func run() {
+	// This has to be a loop, otherwise not leaving any message behind
+	// becomes very tricky.
 	fmt.Println("running")
-	var messages []*Message
+	running = true
+	for {
 
-	var closeReq bool
-	// Leave some time for things to arrive
-	// Possible improvement : if this is not necessary, send whenever we can
-	go func() {
-		realtime.Sleep(50 * realtime.Millisecond)
-		closeReq = true
-	}()
+		var messages []*Message
 
-	// Using a range implies having to close req and opening it again after
-	// the loop, which is prone to panics as some routine could send to req
-	// while it is closed.
-	for !closeReq {
-		select {
-		case m := <-req:
-			messages = append(messages, m)
-		default:
+		// Using a range implies having to close req and opening it
+		// again afterwards, which is prone to panics as some routine
+		// could send to req while it is closed.
+		// TODO : add a timeout?
+		var closeReq bool
+		for !closeReq {
+			select {
+			case m := <-req:
+				messages = append(messages, m)
+			default:
+				if len(messages) > 0 {
+					closeReq = true
+				}
+			}
+		}
+		// Potential issue : requests are sent one simulation step
+		// later because of this mechanic. An improvement would be to
+		// stop reading from req only when the broker is ready.
+
+		if reqSocket == nil {
+			fmt.Println("creating new request socket in time.go")
+			reqSocket, _ = zmq.NewSocket(zmq.REQ)
+			reqSocket.Connect("tcp://127.0.0.1:27000")
+		}
+
+		msg, err := json.Marshal(messages)
+		if err != nil {
+			panic(fmt.Sprintf("Error marshaling message %v:", messages) + err.Error())
+		}
+		_, err = reqSocket.SendBytes(msg, 0)
+		if err != nil {
+			panic("Error sending message: " + err.Error())
+		}
+
+		messages = nil
+		reply, err := reqSocket.RecvBytes(0)
+		if err != nil {
+			panic("Error receiving message:" + err.Error())
+		}
+		if err = json.Unmarshal(reply, &messages); err != nil {
+			panic("Could not unmarshal data:" + err.Error())
+		}
+
+		for _, message := range messages {
+			// TODO : some logic to send in the correct order
+			res <- message
 		}
 	}
-
-	if reqSocket == nil {
-		fmt.Println("creating new request socket in time.go")
-		reqSocket, _ = zmq.NewSocket(zmq.REQ)
-		reqSocket.Connect("tcp://127.0.0.1:27000")
-	}
-
-	msg, err := json.Marshal(messages)
-	if err != nil {
-		panic(fmt.Sprintf("Error marshaling message %v:", messages) + err.Error())
-	}
-	_, err = reqSocket.SendBytes(msg, 0)
-	if err != nil {
-		panic("Error sending message: " + err.Error())
-	}
-
-	messages = nil
-	reply, err := reqSocket.RecvBytes(0)
-	if err != nil {
-		panic("Error receiving message:" + err.Error())
-	}
-	if err = json.Unmarshal(reply, &messages); err != nil {
-		panic("Could not unmarshal data:" + err.Error())
-	}
-
-	for _, message := range messages {
-		// TODO : some logic to send in the correct order
-		res <- message
-	}
-	done <- true
 }
