@@ -8,7 +8,7 @@ import (
 )
 
 func TestHello(t *testing.T) {
-	fmt.Println("simple for loop")
+	fmt.Println("Simple for loop")
 	for i := 0; i < 4; i++ {
 		fmt.Println(Now())
 	}

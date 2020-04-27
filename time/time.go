@@ -1023,14 +1023,14 @@ func daysIn(m Month, year int) int {
 
 // Provided by package runtime.
 func now() (sec int64, nsec int32, mono int64) {
-	t := requester.RequestTime()
+	t := requester.RequestTime() / 1e3
 	return t, int32(t), t
 }
 
 // runtimeNano returns the current value of the runtime clock in nanoseconds.
 func runtimeNano() int64 {
 	sec, _, _ := now()
-	return sec * 1e9
+	return sec * 1e6
 }
 
 // Monotonic times are reported as offsets from startNano.

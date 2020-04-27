@@ -32,13 +32,18 @@ var reqSocket *zmq.Socket
 
 var running bool
 
+/*
+Returns the current time given by Batsim, in milliseconds
+*/
 func RequestTime() int64 {
 	m := &Message{
 		RequestType: "time",
 		Data:        "",
 	}
 	r := send(m)
-	t, _ := strconv.Atoi(r.Data)
+	t, _ := strconv.ParseFloat(r.Data, 64) // in seconds
+	t *= 1e3                               // in nanoseconds
+
 	return int64(t)
 }
 
@@ -57,7 +62,6 @@ func send(m *Message) *Message {
 	// Could it be that two tests happen at the exact same time thus
 	// calling run() twice?
 	// TODO secure run() call?
-	fmt.Println("send")
 	if !running {
 		go run()
 	}
@@ -68,7 +72,6 @@ func send(m *Message) *Message {
 func run() {
 	// This has to be a loop, otherwise not leaving any message behind
 	// becomes very tricky.
-	fmt.Println("running")
 	running = true
 	for {
 
