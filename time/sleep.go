@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package batskytime
+package time
 
 // Sleep pauses the current goroutine for at least the duration d.
 // A negative or zero duration causes Sleep to return immediately.
@@ -103,12 +103,18 @@ func stopTimer(t *runtimeTimer) bool {
 	return false
 }
 
+// resettimer resets the time when a timer should fire.
+// If used for an inactive timer, the timer will become active.
+// This should be called instead of addtimer if the timer value has been,
+// or may have been, used previously.
+// Reports whether the timer was modified before it was run.
 func resetTimer(t *runtimeTimer, when int64) bool {
+	//return modTimer(t, when, t.period, t.f, t.arg, t.seq)
 	return false
 }
 
-func modTimer(t *runtimeTimer, when, period int64, f func(interface{}, uintptr), arg interface{}, seq uintptr) {
-}
+//func modTimer(t *runtimeTimer, when, period int64, f func(interface{}, uintptr), arg interface{}, seq uintptr) {
+//}
 
 // The Timer type represents a single event.
 // When the Timer expires, the current time will be sent on C,

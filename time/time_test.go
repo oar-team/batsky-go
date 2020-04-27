@@ -1,4 +1,4 @@
-package batskytime
+package time
 
 import (
 	"fmt"

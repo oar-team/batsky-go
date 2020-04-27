@@ -9,7 +9,7 @@
 // See tzfile(5), https://en.wikipedia.org/wiki/Zoneinfo,
 // and ftp://munnari.oz.au/pub/oldtz/
 
-package batskytime
+package time
 
 import (
 	"runtime"

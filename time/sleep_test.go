@@ -2,13 +2,13 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package batskytime
+package time
 
 import (
 	"fmt"
 	"testing"
 
-	. "github.com/oar-team/batsky-go/batsky_time"
+	. "github.com/oar-team/batsky-go/time"
 )
 
 func TestSimpleTimer(t *testing.T) {
