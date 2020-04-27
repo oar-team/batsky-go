@@ -1,6 +1,7 @@
 package requester
 
 import (
+	"encoding/json"
 	"fmt"
 	realtime "time"
 
@@ -17,14 +18,14 @@ import (
 // data for a time request is ""
 // data for a timer request is the duration of the timer
 
-type message struct {
-	requestType string
-	data        string
+type Message struct {
+	RequestType string
+	Data        string
 }
 
 //var closeReq = make(chan bool)
-var req = make(chan *message)
-var res = make(chan *message)
+var req = make(chan *Message)
+var res = make(chan *Message)
 var done = make(chan bool)
 
 var reqSocket *zmq.Socket
@@ -32,9 +33,9 @@ var reqSocket *zmq.Socket
 var sending bool
 
 func RequestTime() int64 {
-	m := &message{
-		requestType: "time",
-		data:        "",
+	m := &Message{
+		RequestType: "time",
+		Data:        "",
 	}
 	r := send(m)
 	if r != m {
@@ -44,9 +45,9 @@ func RequestTime() int64 {
 }
 
 func RequestTimer(durationSeconds int64) {
-	m := &message{
-		requestType: "timer",
-		data:        "0",
+	m := &Message{
+		RequestType: "timer",
+		Data:        "0",
 	}
 	r := send(m)
 	if r != m {
@@ -54,11 +55,11 @@ func RequestTimer(durationSeconds int64) {
 	}
 }
 
-func send(m *message) *message {
+func send(m *Message) *Message {
 	// Could it be that two tests happen at the exact same time thus
 	// calling run() twice?
 	// TODO secure run() call?
-	var r *message
+	var r *Message
 	fmt.Println("send")
 	if sending {
 		req <- m
@@ -80,12 +81,13 @@ func send(m *message) *message {
 
 func doSend() {
 	fmt.Println("running")
-	var messages []*message
+	var messages []*Message
 
 	var closeReq bool
-	// Temporary, leave some time for things to arrive
+	// Leave some time for things to arrive
+	// Possible improvement : if this is not necessary, send whenever we can
 	go func() {
-		realtime.Sleep(1 * realtime.Second)
+		realtime.Sleep(50 * realtime.Millisecond)
 		closeReq = true
 	}()
 
@@ -105,23 +107,24 @@ func doSend() {
 		reqSocket, _ = zmq.NewSocket(zmq.REQ)
 		reqSocket.Connect("tcp://127.0.0.1:27000")
 	}
-	//msg, err := json.Marshal(messages)
-	//if err != nil {
-	//	panic(fmt.Sprintf("Error marshaling message %v:", messages) + err.Error())
-	//}
-	//_, err = reqSocket.SendBytes(msg, 0)
-	//if err != nil {
-	//	panic("Error sending message: " + err.Error())
-	//}
 
-	//messages = nil
-	//reply, err := reqSocket.RecvBytes(0)
-	//if err != nil {
-	//	panic("Error receiving message:" + err.Error())
-	//}
-	//if err = json.Unmarshal(reply, &messages); err != nil {
-	//	panic("Could not unmarshal data:" + err.Error())
-	//}
+	msg, err := json.Marshal(messages)
+	if err != nil {
+		panic(fmt.Sprintf("Error marshaling message %v:", messages) + err.Error())
+	}
+	_, err = reqSocket.SendBytes(msg, 0)
+	if err != nil {
+		panic("Error sending message: " + err.Error())
+	}
+
+	messages = nil
+	reply, err := reqSocket.RecvBytes(0)
+	if err != nil {
+		panic("Error receiving message:" + err.Error())
+	}
+	if err = json.Unmarshal(reply, &messages); err != nil {
+		panic("Could not unmarshal data:" + err.Error())
+	}
 
 	for _, message := range messages {
 		// TODO : some logic to send in the correct order

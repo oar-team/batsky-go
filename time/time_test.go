@@ -30,13 +30,13 @@ func TestMultipleRoutines(t *testing.T) {
 func TestMultipleRoutinesDelayed(t *testing.T) {
 	fmt.Println("\nA few routines delayed")
 	var wg sync.WaitGroup
-	for i := 0; i < 6; i++ {
+	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		go func(wg *sync.WaitGroup, id int) {
 			defer wg.Done()
 			fmt.Println(Now())
 		}(&wg, i)
-		time.Sleep(400 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 	}
 	wg.Wait()
 }
