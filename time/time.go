@@ -77,11 +77,9 @@ package time
 
 import (
 	"errors"
-	"fmt"
-	"strconv"
 	_ "unsafe" // for go:linkname
 
-	zmq "github.com/pebbe/zmq4"
+	"github.com/oar-team/batsky-go/requester"
 )
 
 // A Time represents an instant in time with nanosecond precision.
@@ -1023,25 +1021,10 @@ func daysIn(m Month, year int) int {
 	return int(daysBefore[m] - daysBefore[m-1])
 }
 
-var requester *zmq.Socket
-
 // Provided by package runtime.
 func now() (sec int64, nsec int32, mono int64) {
-	if requester == nil {
-		fmt.Println("creating new request socket in time.go")
-		requester, _ = zmq.NewSocket(zmq.REQ)
-		requester.Connect("tcp://127.0.0.1:27000")
-	}
-
-	requester.SendMessage([]string{"request time"}, 0)
-
-	reply, _ := requester.RecvMessage(0)
-	var time int
-	if len(reply) > 0 {
-		time, _ = strconv.Atoi(reply[0])
-	}
-
-	return int64(time), int32(time), int64(time)
+	t := requester.RequestTime()
+	return t, int32(t), t
 }
 
 // runtimeNano returns the current value of the runtime clock in nanoseconds.
