@@ -57,15 +57,17 @@ func RequestTimer(durationSeconds int64) {
 func send(m *message) *message {
 	// Could it be that two tests happen at the exact same time thus
 	// calling run() twice?
-	// TODO secure run() call
+	// TODO secure run() call?
 	var r *message
 	fmt.Println("send")
 	if sending {
 		req <- m
 		r = <-res
 	} else {
-		// If the requester is not running yet, this call has the
-		// responsibility of running it and waiting for it to finish
+		// If doSend is not running yet, this call has the
+		// responsibility of running it and waiting for it to end
+		// We have to check here when all res have be sent so as not
+		// to call another instance of it.
 		sending = true
 		go doSend()
 		req <- m
@@ -80,21 +82,20 @@ func doSend() {
 	fmt.Println("running")
 	var messages []*message
 
-	var closeReqBool bool
+	var closeReq bool
 	// Temporary, leave some time for things to arrive
 	go func() {
 		realtime.Sleep(1 * realtime.Second)
-		closeReqBool = true
+		closeReq = true
 	}()
 
 	// Using a range implies having to close req and opening it again after
 	// the loop, which is prone to panics as some routine could send to req
 	// while it is closed.
-	for !closeReqBool {
+	for !closeReq {
 		select {
 		case m := <-req:
 			messages = append(messages, m)
-			fmt.Printf("got message %v\n", m)
 		default:
 		}
 	}
