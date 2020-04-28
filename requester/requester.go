@@ -29,6 +29,7 @@ var res = make(chan *Message)
 var done = make(chan bool)
 
 var reqSocket *zmq.Socket
+var handshakeSocket *zmq.Socket
 
 var running bool
 
@@ -74,22 +75,35 @@ func run() {
 	// becomes very tricky.
 	running = true
 	for {
-
-		var messages []*Message
+		// Some solution to the sync problem with batkube mentioned
+		// thereafter
+		if handshakeSocket == nil {
+			fmt.Println("Creating new handshake socket in time.go")
+			handshakeSocket, _ = zmq.NewSocket(zmq.REP)
+			handshakeSocket.Connect("tcp://127.0.0.1:27001")
+		}
+		readyBytes, _ := handshakeSocket.RecvBytes(0)
+		ready := string(readyBytes)
+		if ready != "ready" {
+			panic(fmt.Sprintf("Expected %s, got %s", "ready", ready))
+		}
+		handshakeSocket.SendBytes([]byte("ok"), 0)
 
 		// Using a range implies having to close req and opening it
 		// again afterwards, which is prone to panics as some routine
 		// could send to req while it is closed.
 		// TODO : add a timeout?
 		var closeReq bool
+		var messages []*Message
 		for !closeReq {
 			select {
 			case m := <-req:
 				messages = append(messages, m)
 			default:
-				if len(messages) > 0 {
-					closeReq = true
-				}
+				//if len(messages) > 0 {
+				//	closeReq = true
+				//}
+				closeReq = true
 			}
 		}
 		// Potential issue : requests are sent one simulation step
@@ -97,7 +111,7 @@ func run() {
 		// stop reading from req only when the broker is ready.
 
 		if reqSocket == nil {
-			fmt.Println("creating new request socket in time.go")
+			fmt.Println("Creating new request socket in time.go")
 			reqSocket, _ = zmq.NewSocket(zmq.REQ)
 			reqSocket.Connect("tcp://127.0.0.1:27000")
 		}
