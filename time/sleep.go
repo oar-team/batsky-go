@@ -4,6 +4,8 @@
 
 package time
 
+import "github.com/oar-team/batsky-go/requester"
+
 // Sleep pauses the current goroutine for at least the duration d.
 // A negative or zero duration causes Sleep to return immediately.
 func Sleep(d Duration) {
@@ -11,15 +13,13 @@ func Sleep(d Duration) {
 
 // Interface to timers implemented in package runtime.
 // Must be in sync with ../runtime/time.go:/^type timer
+// Note : has been modified for the custom time lib
 type runtimeTimer struct {
-	pp       uintptr
-	when     int64
-	period   int64
-	f        func(interface{}, uintptr) // NOTE: must not be closure
-	arg      interface{}
-	seq      uintptr
-	nextwhen int64
-	status   uint32
+	when        int64
+	period      int64
+	f           func(interface{})
+	arg         interface{}
+	currentTime *Time
 }
 
 // when is a helper function for setting the 'when' field of a runtimeTimer.
@@ -30,73 +30,36 @@ func when(d Duration) int64 {
 	if d <= 0 {
 		return runtimeNano()
 	}
-	t := runtimeNano() + int64(d)
+	t := requester.RequestTimer(int64(d)) + int64(d)
 	if t < 0 {
 		t = 1<<63 - 1 // math.MaxInt64
 	}
 	return t
 }
 
+func nanoToTime(t int64) Time {
+	// This line must be synced with what now() returns
+	sec, nsec, mono := t/1e9, int32(t%1e9), t
+	mono -= startNano
+	sec += unixToInternal - minWall
+	if uint64(sec)>>33 != 0 {
+		return Time{uint64(nsec), sec + minWall, Local}
+	}
+	return Time{hasMonotonic | uint64(sec)<<nsecShift | uint64(nsec), mono, Local}
+}
+
 // maxWhen is the maximum value for timer's when field.
 const maxWhen = 1<<63 - 1
 
-// Values for the timer status field.
-const (
-	// Timer has no status set yet.
-	timerNoStatus = iota
-
-	// Waiting for timer to fire.
-	// The timer is in some P's heap.
-	timerWaiting
-
-	// Running the timer function.
-	// A timer will only have this status briefly.
-	timerRunning
-
-	// The timer is deleted and should be removed.
-	// It should not be run, but it is still in some P's heap.
-	timerDeleted
-
-	// The timer is being removed.
-	// The timer will only have this status briefly.
-	timerRemoving
-
-	// The timer has been stopped.
-	// It is not in any P's heap.
-	timerRemoved
-
-	// The timer is being modified.
-	// The timer will only have this status briefly.
-	timerModifying
-
-	// The timer has been modified to an earlier time.
-	// The new when value is in the nextwhen field.
-	// The timer is in some P's heap, possibly in the wrong place.
-	timerModifiedEarlier
-
-	// The timer has been modified to the same or a later time.
-	// The new when value is in the nextwhen field.
-	// The timer is in some P's heap, possibly in the wrong place.
-	timerModifiedLater
-
-	// The timer has been modified and is being moved.
-	// The timer will only have this status briefly.
-	timerMoving
-)
-
 func startTimer(t *runtimeTimer) {
-	// when must never be negative; otherwise runtimer will overflow
-	// during its delta calculation and never expire other runtime timers.
-	if t.when < 0 {
-		t.when = maxWhen
-	}
-	if t.status != timerNoStatus {
-		panic("addtimer called with initialized timer")
-	}
-	t.status = timerWaiting
-
-	//TODO
-
+	go func() {
+		currentTime := runtimeNano()
+		for currentTime < t.when {
+			currentTime = runtimeNano()
+		}
+		*t.currentTime = nanoToTime(currentTime)
+		t.f(t.arg)
+	}()
 }
 
 func stopTimer(t *runtimeTimer) bool {
@@ -163,9 +126,10 @@ func NewTimer(d Duration) *Timer {
 		r: runtimeTimer{
 			when: when(d),
 			f:    sendTime,
-			arg:  c,
 		},
 	}
+	t.r.currentTime = &Time{}
+	t.r.arg = sendTimeArgs{c, t.r.currentTime}
 	startTimer(&t.r)
 	return t
 }
@@ -201,14 +165,19 @@ func (t *Timer) Reset(d Duration) bool {
 	return resetTimer(&t.r, w)
 }
 
-func sendTime(c interface{}, seq uintptr) {
+type sendTimeArgs struct {
+	c chan Time
+	t *Time
+}
+
+func sendTime(args interface{}) {
 	// Non-blocking send of time on c.
 	// Used in NewTimer, it cannot block anyway (buffer).
 	// Used in NewTicker, dropping sends on the floor is
 	// the desired behavior when the reader gets behind,
 	// because the sends are periodic.
 	select {
-	case c.(chan Time) <- Now():
+	case args.(sendTimeArgs).c <- *args.(sendTimeArgs).t:
 	default:
 	}
 }
@@ -238,6 +207,6 @@ func AfterFunc(d Duration, f func()) *Timer {
 	return t
 }
 
-func goFunc(arg interface{}, seq uintptr) {
+func goFunc(arg interface{}) {
 	go arg.(func())()
 }

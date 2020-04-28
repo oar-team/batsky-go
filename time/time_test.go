@@ -7,13 +7,6 @@ import (
 	"time"
 )
 
-func TestHello(t *testing.T) {
-	fmt.Println("Simple for loop")
-	for i := 0; i < 4; i++ {
-		fmt.Println(Now())
-	}
-}
-
 func TestMultipleRoutines(t *testing.T) {
 	fmt.Println("\nA few routines")
 	var wg sync.WaitGroup
@@ -25,6 +18,13 @@ func TestMultipleRoutines(t *testing.T) {
 		}(&wg, i)
 	}
 	wg.Wait()
+}
+
+func TestHello(t *testing.T) {
+	fmt.Println("\nSimple for loop")
+	for i := 0; i < 4; i++ {
+		fmt.Println(Now())
+	}
 }
 
 func TestMultipleRoutinesDelayed(t *testing.T) {

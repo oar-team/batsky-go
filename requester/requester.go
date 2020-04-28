@@ -17,8 +17,12 @@ import (
 // and requests for timers. Knowing when a scheduler asks for a timer is
 // important in order to send CALL_ME_LATER events to Batsim.
 //
+// REQUEST
 // data for a time request is ""
 // data for a timer request is the duration of the timer
+//
+// REPLY
+// in both cases, data is the current time.
 
 type Message struct {
 	RequestType string
@@ -36,28 +40,33 @@ var handshakeSocket *zmq.Socket
 var running bool
 
 /*
-Returns the current time given by Batsim, in milliseconds
+Returns the current time given by Batsim, in nanoseconds
 */
 func RequestTime() int64 {
 	m := &Message{
 		RequestType: "time",
 	}
-	r := send(m)
-	t, _ := strconv.ParseFloat(r.Data, 64) // in seconds
-	t *= 1e3
 
-	return int64(t)
+	return sendAndConvert(m)
 }
 
-func RequestTimer(durationSeconds int64) int64 {
+func RequestTimer(d int64) int64 {
+	// d is a Duration, in nanoseconds
+	// Reduce precision to milliseconds and convert to seconds
+	f := float64(d/1e6) / 1e3
 	m := &Message{
 		RequestType: "timer",
+		Data:        fmt.Sprintf("%f", f),
 	}
+
+	return sendAndConvert(m)
+}
+
+// sends the messag and converts the result to nanoseconds
+func sendAndConvert(m *Message) int64 {
 	r := send(m)
 	t, _ := strconv.ParseFloat(r.Data, 64) // in seconds
-	t *= 1e3
-
-	return int64(t)
+	return int64(t) * 1e9
 }
 
 func send(m *Message) *Message {
@@ -74,20 +83,16 @@ func send(m *Message) *Message {
 	m.UUID = uuid.New().String()
 	_, ok := res.Load(m.UUID)
 	for ok {
-		// This would be very, very unlucky
+		// This would be very, very unlucky. Supposedly it will never ever happen.
 		fmt.Printf(fmt.Sprintf("Map entry already set for UUID %s. Generating a new one\n", m.UUID))
 		m.UUID = uuid.New().String()
 		_, ok = res.Load(m.UUID)
 	}
-	res.Store(m.UUID, make(chan *Message))
-	resChan, ok := res.Load(m.UUID)
-	if !ok {
-		panic(fmt.Sprintf("Could not load channel %s from res map\n", m.UUID[5:]))
-	}
+	resChan := make(chan *Message)
+	res.Store(m.UUID, resChan)
 
 	req <- m
-	fmt.Printf("waiting for %s\n", m.UUID[:5])
-	r := <-resChan.(chan *Message)
+	r := <-resChan
 	if r.UUID != m.UUID {
 		panic(fmt.Sprintf("Expected %s, got %s\n", m.UUID[:5], r.UUID[:5]))
 	}
@@ -96,17 +101,27 @@ func send(m *Message) *Message {
 }
 
 func run() {
+	// Only one of these can be running at a time
+	running = true
+
+	fmt.Println("Creating new handshake socket for time requests")
+	handshakeSocket, _ = zmq.NewSocket(zmq.REP)
+	handshakeSocket.Connect("tcp://127.0.0.1:27001")
+
+	fmt.Println("Creating new request socket for time requests")
+	reqSocket, _ = zmq.NewSocket(zmq.REQ)
+	reqSocket.Connect("tcp://127.0.0.1:27000")
 	// This has to be a loop, otherwise not leaving any message behind
 	// becomes very tricky.
-	running = true
 	for {
-		// Some solution to the sync problem with batkube.
+		// One solution to the sync problem with batkube.
 		// Requests are sent only when the broker makes us know it's ready.
-		if handshakeSocket == nil {
-			fmt.Println("Creating new handshake socket in time.go")
-			handshakeSocket, _ = zmq.NewSocket(zmq.REP)
-			handshakeSocket.Connect("tcp://127.0.0.1:27001")
-		}
+		//
+		// One other solution would be to keep only one socket and
+		// inverse the roles (the broker is the requester). This would
+		// result in a few more exchanges though to comply with the zmq
+		// protocol. Having two sockets allows to send two subsequent
+		// messages.
 		readyBytes, _ := handshakeSocket.RecvBytes(0)
 		ready := string(readyBytes)
 		if ready != "ready" {
@@ -120,24 +135,20 @@ func run() {
 		// TODO : add a timeout? Do not wait for messages to be populated?
 		// Wait a bit to leave the scheduler some time to compute beforehand?
 		var closeReq bool
-		var messages []*Message
+		messages := make([]*Message, 0)
 		for !closeReq {
 			select {
 			case m := <-req:
 				messages = append(messages, m)
 			default:
-				if len(messages) > 0 {
-					closeReq = true
-				}
+				//if len(messages) > 0 {
+				//	closeReq = true
+				//}
+				closeReq = true
 			}
 		}
 
 		// ZMQ send and receive
-		if reqSocket == nil {
-			fmt.Println("Creating new request socket in time.go")
-			reqSocket, _ = zmq.NewSocket(zmq.REQ)
-			reqSocket.Connect("tcp://127.0.0.1:27000")
-		}
 		msg, err := json.Marshal(messages)
 		if err != nil {
 			panic(fmt.Sprintf("Error marshaling message %v:", messages) + err.Error())
@@ -161,7 +172,6 @@ func run() {
 			if !ok {
 				panic(fmt.Sprintf("Could not load channel %s from res map\n", r.UUID[5:]))
 			}
-			fmt.Printf("sending %s\n", r.UUID[:5])
 			resChan.(chan *Message) <- r
 		}
 	}
