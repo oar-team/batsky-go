@@ -23,13 +23,12 @@ import (
 type Message struct {
 	RequestType string
 	Data        string
+	UUID        string
 }
 
 //var closeReq = make(chan bool)
 var req = make(chan *Message)
-var res = make(chan *Message)
-
-var lost = sync.Map{}
+var res = sync.Map{}
 
 var reqSocket *zmq.Socket
 var handshakeSocket *zmq.Socket
@@ -70,29 +69,23 @@ func send(m *Message) *Message {
 	// calling run() twice?
 	// TODO secure run() call?
 	if !running {
+		fmt.Println("Running loop for time requests. If this message appears twice, there is a problem in requester.go")
 		go run()
 	}
-	req <- m
-	r := <-res
-	// sync maps is the only functionnal way I found to retrieve the
-	// right reply.
-	// A better solution using channels is very welcome.
-	// IDEA : generalize this map idea to store channels associated with uuids
-	if r.Data != m.Data {
-		fmt.Printf("sent %s, got %s\n", m.Data[:5], r.Data[:5])
-		lost.Store(r.Data, r)
-		ok := false
-		var v interface{}
-		for !ok {
-			v, ok = lost.Load(m.Data)
-		}
-		r = v.(*Message)
-	}
-	if r.Data != m.Data {
-		panic("nope")
+
+	// This is a nice solution allowing us to retrieve the result
+	// only when it is ready without blocking the entire code.
+	res.Store(m.UUID, make(chan *Message))
+	resChan, ok := res.Load(m.UUID)
+	if !ok {
+		panic(fmt.Sprintf("Could not load channel %s from res map\n", m.UUID[5:]))
 	}
 
-	fmt.Printf("got %s\n", m.Data[:5])
+	req <- m
+	r := <-resChan.(chan *Message)
+	if r.UUID != m.UUID {
+		panic(fmt.Sprintf("Expected %s, got %s\n", m.UUID[:5], r.UUID[:5]))
+	}
 	return r
 }
 
@@ -133,12 +126,12 @@ func run() {
 			}
 		}
 
+		// ZMQ send and receive
 		if reqSocket == nil {
 			fmt.Println("Creating new request socket in time.go")
 			reqSocket, _ = zmq.NewSocket(zmq.REQ)
 			reqSocket.Connect("tcp://127.0.0.1:27000")
 		}
-
 		msg, err := json.Marshal(messages)
 		if err != nil {
 			panic(fmt.Sprintf("Error marshaling message %v:", messages) + err.Error())
@@ -147,7 +140,6 @@ func run() {
 		if err != nil {
 			panic("Error sending message: " + err.Error())
 		}
-
 		messages = nil
 		reply, err := reqSocket.RecvBytes(0)
 		if err != nil {
@@ -157,9 +149,13 @@ func run() {
 			panic("Could not unmarshal data:" + err.Error())
 		}
 
-		for _, message := range messages {
-			// TODO : some logic to send in the correct order
-			res <- message
+		// Handle the reply
+		for _, r := range messages {
+			resChan, ok := res.Load(r.UUID)
+			if !ok {
+				panic(fmt.Sprintf("Could not load channel %s from res map\n", r.UUID[5:]))
+			}
+			resChan.(chan *Message) <- r
 		}
 	}
 }
