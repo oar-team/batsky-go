@@ -39,10 +39,8 @@ var running bool
 Returns the current time given by Batsim, in milliseconds
 */
 func RequestTime() int64 {
-	id := uuid.New()
 	m := &Message{
 		RequestType: "time",
-		Data:        id.String(),
 	}
 	r := send(m)
 	t, _ := strconv.ParseFloat(r.Data, 64) // in seconds
@@ -52,10 +50,8 @@ func RequestTime() int64 {
 }
 
 func RequestTimer(durationSeconds int64) int64 {
-	id := uuid.New()
 	m := &Message{
 		RequestType: "timer",
-		Data:        id.String(),
 	}
 	r := send(m)
 	t, _ := strconv.ParseFloat(r.Data, 64) // in seconds
@@ -75,6 +71,14 @@ func send(m *Message) *Message {
 
 	// This is a nice solution allowing us to retrieve the result
 	// only when it is ready without blocking the entire code.
+	m.UUID = uuid.New().String()
+	_, ok := res.Load(m.UUID)
+	for ok {
+		// This would be very, very unlucky
+		fmt.Printf(fmt.Sprintf("Map entry already set for UUID %s. Generating a new one\n", m.UUID))
+		m.UUID = uuid.New().String()
+		_, ok = res.Load(m.UUID)
+	}
 	res.Store(m.UUID, make(chan *Message))
 	resChan, ok := res.Load(m.UUID)
 	if !ok {
@@ -82,10 +86,12 @@ func send(m *Message) *Message {
 	}
 
 	req <- m
+	fmt.Printf("waiting for %s\n", m.UUID[:5])
 	r := <-resChan.(chan *Message)
 	if r.UUID != m.UUID {
 		panic(fmt.Sprintf("Expected %s, got %s\n", m.UUID[:5], r.UUID[:5]))
 	}
+	res.Delete(r.UUID)
 	return r
 }
 
@@ -155,6 +161,7 @@ func run() {
 			if !ok {
 				panic(fmt.Sprintf("Could not load channel %s from res map\n", r.UUID[5:]))
 			}
+			fmt.Printf("sending %s\n", r.UUID[:5])
 			resChan.(chan *Message) <- r
 		}
 	}
