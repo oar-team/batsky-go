@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"sync"
 
+	"github.com/google/uuid"
 	zmq "github.com/pebbe/zmq4"
 )
 
@@ -26,7 +28,8 @@ type Message struct {
 //var closeReq = make(chan bool)
 var req = make(chan *Message)
 var res = make(chan *Message)
-var done = make(chan bool)
+
+var lost = sync.Map{}
 
 var reqSocket *zmq.Socket
 var handshakeSocket *zmq.Socket
@@ -37,26 +40,29 @@ var running bool
 Returns the current time given by Batsim, in milliseconds
 */
 func RequestTime() int64 {
+	id := uuid.New()
 	m := &Message{
 		RequestType: "time",
-		Data:        "",
+		Data:        id.String(),
 	}
 	r := send(m)
 	t, _ := strconv.ParseFloat(r.Data, 64) // in seconds
-	t *= 1e3                               // in nanoseconds
+	t *= 1e3
 
 	return int64(t)
 }
 
-func RequestTimer(durationSeconds int64) {
+func RequestTimer(durationSeconds int64) int64 {
+	id := uuid.New()
 	m := &Message{
 		RequestType: "timer",
-		Data:        "0",
+		Data:        id.String(),
 	}
 	r := send(m)
-	if r != m {
-		fmt.Printf("Expected %p, found %p\n", m, r)
-	}
+	t, _ := strconv.ParseFloat(r.Data, 64) // in seconds
+	t *= 1e3
+
+	return int64(t)
 }
 
 func send(m *Message) *Message {
@@ -67,7 +73,27 @@ func send(m *Message) *Message {
 		go run()
 	}
 	req <- m
-	return <-res
+	r := <-res
+	// sync maps is the only functionnal way I found to retrieve the
+	// right reply.
+	// A better solution using channels is very welcome.
+	// IDEA : generalize this map idea to store channels associated with uuids
+	if r.Data != m.Data {
+		fmt.Printf("sent %s, got %s\n", m.Data[:5], r.Data[:5])
+		lost.Store(r.Data, r)
+		ok := false
+		var v interface{}
+		for !ok {
+			v, ok = lost.Load(m.Data)
+		}
+		r = v.(*Message)
+	}
+	if r.Data != m.Data {
+		panic("nope")
+	}
+
+	fmt.Printf("got %s\n", m.Data[:5])
+	return r
 }
 
 func run() {
@@ -75,8 +101,8 @@ func run() {
 	// becomes very tricky.
 	running = true
 	for {
-		// Some solution to the sync problem with batkube mentioned
-		// thereafter
+		// Some solution to the sync problem with batkube.
+		// Requests are sent only when the broker makes us know it's ready.
 		if handshakeSocket == nil {
 			fmt.Println("Creating new handshake socket in time.go")
 			handshakeSocket, _ = zmq.NewSocket(zmq.REP)
@@ -85,14 +111,15 @@ func run() {
 		readyBytes, _ := handshakeSocket.RecvBytes(0)
 		ready := string(readyBytes)
 		if ready != "ready" {
-			panic(fmt.Sprintf("Expected %s, got %s", "ready", ready))
+			panic(fmt.Sprintf("Failed handshake : Expected %s, got %s", "ready", ready))
 		}
 		handshakeSocket.SendBytes([]byte("ok"), 0)
 
 		// Using a range implies having to close req and opening it
 		// again afterwards, which is prone to panics as some routine
 		// could send to req while it is closed.
-		// TODO : add a timeout?
+		// TODO : add a timeout? Do not wait for messages to be populated?
+		// Wait a bit to leave the scheduler some time to compute beforehand?
 		var closeReq bool
 		var messages []*Message
 		for !closeReq {
@@ -100,15 +127,11 @@ func run() {
 			case m := <-req:
 				messages = append(messages, m)
 			default:
-				//if len(messages) > 0 {
-				//	closeReq = true
-				//}
-				closeReq = true
+				if len(messages) > 0 {
+					closeReq = true
+				}
 			}
 		}
-		// Potential issue : requests are sent one simulation step
-		// later because of this mechanic. An improvement would be to
-		// stop reading from req only when the broker is ready.
 
 		if reqSocket == nil {
 			fmt.Println("Creating new request socket in time.go")

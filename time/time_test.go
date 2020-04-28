@@ -40,3 +40,16 @@ func TestMultipleRoutinesDelayed(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestMoreRoutines(t *testing.T) {
+	fmt.Println("\nA lot of routines")
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func(wg *sync.WaitGroup, id int) {
+			defer wg.Done()
+			fmt.Println(Now())
+		}(&wg, i)
+	}
+	wg.Wait()
+}

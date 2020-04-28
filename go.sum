@@ -1,2 +1,4 @@
+github.com/google/uuid v1.1.1 h1:Gkbcsh/GbpXz7lPftLA3P6TYMwjCLYm83jiFQZF/3gY=
+github.com/google/uuid v1.1.1/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
 github.com/pebbe/zmq4 v1.2.0 h1:SMCj4kvOpBvM97uWlv7QSlwjpCpYOXdiK8piMjGmzOs=
 github.com/pebbe/zmq4 v1.2.0/go.mod h1:7N4y5R18zBiu3l0vajMUWQgZyjv464prE8RCyBcmnZM=
