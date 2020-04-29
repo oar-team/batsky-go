@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	zmq "github.com/pebbe/zmq4"
 )
@@ -79,10 +80,8 @@ func run() {
 		}
 		handshakeSocket.SendBytes([]byte("ok"), 0)
 
-		currRequestId := requestId
-		requestId++
-		resChan, _ := res.LoadOrStore(currRequestId, make(chan int64))
-		reqChan, _ := req.LoadOrStore(currRequestId, make(chan int64))
+		resChan, _ := res.LoadOrStore(requestId, make(chan int64))
+		reqChan, _ := req.LoadOrStore(requestId, make(chan int64))
 		// The rest of the loop makes the assumption that every request from now on is made
 		// for requestId which may not be true.
 		// TODO : verify that
@@ -91,18 +90,36 @@ func run() {
 		// panics in this situation
 		closeReq := false
 		reqNumber := 0
+		currRequestId := requestId
+		emptyReq := true
 		for !closeReq {
 			select {
 			case d := <-reqChan.(chan int64):
 				reqNumber++
+				emptyReq = false
 				if d > 0 {
 					requests = append(requests, d)
 				}
 			default:
-				closeReq = true // are we sure about that?
+				// this assumes there will be other calls. Can potentially deadlock
+				if reqNumber > 0 {
+					if currRequestId == requestId {
+						requestId++
+					} else {
+						// we make another round to make sure
+						// req is empty, but maybe it's not
+						// sufficient
+						closeReq = true
+						time.Sleep(10 * time.Millisecond)
+					}
+				} else if !emptyReq {
+					emptyReq = true
+					time.Sleep(10 * time.Millisecond)
+				} else {
+					closeReq = true
+				}
 			}
 		}
-		fmt.Printf("request id %d; nb %d\n", currRequestId, reqNumber)
 
 		// ZMQ send and receive
 		// Probably there is something more efficient than json for this.
@@ -120,6 +137,7 @@ func run() {
 			panic("Error receiving message:" + err.Error())
 		}
 		now := int64(binary.LittleEndian.Uint64(b))
+		//fmt.Printf("request id %d; nb %d; now %f\n", currRequestId, reqNumber, float64(now/1e6)/1e3)
 
 		// Send the replies
 		for i := 0; i < reqNumber; i++ {
