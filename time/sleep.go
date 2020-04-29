@@ -5,8 +5,6 @@
 package time
 
 import (
-	"fmt"
-
 	"github.com/oar-team/batsky-go/requester"
 )
 
@@ -30,11 +28,6 @@ const (
 	// The timer is being modified.
 	// The timer will only have this status briefly.
 	timerModifying
-
-	// The timer has been modified
-	// This concatenas the modifiedEarlier and modifiedLater cases
-	// from runtime
-	timerModified
 )
 
 // Interface to timers implemented in package runtime.
@@ -93,9 +86,7 @@ func startTimer(t *runtimeTimer) {
 			currentTime := runtimeNano()
 			switch t.status {
 			case timerWaiting:
-				fmt.Printf("timer: currentTime %d; when %d\n", currentTime, t.when)
 				if currentTime >= t.when {
-					fmt.Println("gotta run")
 					*t.currentTime = nanoToTime(currentTime)
 					t.status = timerRunning
 				}
@@ -103,7 +94,6 @@ func startTimer(t *runtimeTimer) {
 				t.f(t.arg)
 				t.status = timerDeleted
 			case timerDeleted:
-				fmt.Printf("timer finished: %d\n", currentTime)
 				return
 			case timerModifying:
 				for t.status == timerModifying {

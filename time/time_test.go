@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sync"
 	"testing"
-	"time"
 )
 
 func TestMultipleRoutines(t *testing.T) {
@@ -36,7 +35,7 @@ func TestMultipleRoutinesDelayed(t *testing.T) {
 			defer wg.Done()
 			fmt.Println(Now())
 		}(&wg, i)
-		time.Sleep(300 * time.Millisecond)
+		//	time.Sleep(300 * time.Millisecond)
 	}
 	wg.Wait()
 }
@@ -52,4 +51,12 @@ func TestMoreRoutines(t *testing.T) {
 		}(&wg, i)
 	}
 	wg.Wait()
+}
+
+func TestEpoch(t *testing.T) {
+	fmt.Println("\nTest unix epoch")
+	now := Now()
+	unix := now.Unix()
+	nanos := now.UnixNano()
+	fmt.Printf("now %v\nunix %d\nnanos %d\n", now, unix, nanos)
 }

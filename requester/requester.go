@@ -63,7 +63,6 @@ func RequestTimer(d int64) int64 {
 	}
 
 	r := sendAndConvert(m)
-	fmt.Printf("timer called at %d\n", r)
 	return r
 }
 
@@ -71,7 +70,7 @@ func RequestTimer(d int64) int64 {
 func sendAndConvert(m *Message) int64 {
 	r := send(m)
 	t, _ := strconv.ParseFloat(r.Data, 64) // in seconds
-	return int64(t) * 1e9
+	return int64(t * 1e9)
 }
 
 func send(m *Message) *Message {

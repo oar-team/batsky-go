@@ -12,6 +12,5 @@ import (
 func TestSimpleTimer(t *testing.T) {
 	fmt.Println("\nSimple timer")
 	timer := NewTimer(Second)
-	<-timer.C
-	fmt.Println("Simple timer fired")
+	fmt.Printf("Simple timer fired, %v\n", <-timer.C)
 }
