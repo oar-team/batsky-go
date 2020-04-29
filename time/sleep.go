@@ -294,6 +294,7 @@ func AfterFunc(d Duration, f func()) *Timer {
 			arg:  f,
 		},
 	}
+	t.r.currentTime = &Time{}
 	startTimer(&t.r)
 	return t
 }
