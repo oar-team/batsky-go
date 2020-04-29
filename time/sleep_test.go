@@ -5,11 +5,13 @@
 package time
 
 import (
+	"fmt"
 	"testing"
 )
 
 func TestSimpleTimer(t *testing.T) {
-	//timer := NewTimer(Second)
-	//<-timer.C
-	//fmt.Println("Simple timer fired")
+	fmt.Println("\nSimple timer")
+	timer := NewTimer(Second)
+	<-timer.C
+	fmt.Println("Simple timer fired")
 }

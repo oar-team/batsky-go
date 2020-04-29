@@ -30,8 +30,11 @@ type Message struct {
 	UUID        string
 }
 
-//var closeReq = make(chan bool)
 var req = make(chan *Message)
+
+// The sync map and UUID system is here to sync requests with replies.
+// It is not necessary anymore : we need only to track the zmq requests with
+// a unique id for every message belonging to the same request.
 var res = sync.Map{}
 
 var reqSocket *zmq.Socket
@@ -59,7 +62,9 @@ func RequestTimer(d int64) int64 {
 		Data:        fmt.Sprintf("%f", f),
 	}
 
-	return sendAndConvert(m)
+	r := sendAndConvert(m)
+	fmt.Printf("timer called at %d\n", r)
+	return r
 }
 
 // sends the messag and converts the result to nanoseconds
@@ -111,6 +116,7 @@ func run() {
 	fmt.Println("Creating new request socket for time requests")
 	reqSocket, _ = zmq.NewSocket(zmq.REQ)
 	reqSocket.Connect("tcp://127.0.0.1:27000")
+
 	// This has to be a loop, otherwise not leaving any message behind
 	// becomes very tricky.
 	for {

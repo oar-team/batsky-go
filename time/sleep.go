@@ -4,22 +4,54 @@
 
 package time
 
-import "github.com/oar-team/batsky-go/requester"
+import (
+	"fmt"
 
-// Sleep pauses the current goroutine for at least the duration d.
-// A negative or zero duration causes Sleep to return immediately.
-func Sleep(d Duration) {
-}
+	"github.com/oar-team/batsky-go/requester"
+)
+
+// Values for the timer status field.
+const (
+	// Timer has no status set yet.
+	timerNoStatus = iota
+
+	// Waiting for timer to fire.
+	// The timer is in some P's heap.
+	timerWaiting
+
+	// Running the timer function.
+	// A timer will only have this status briefly.
+	timerRunning
+
+	// The timer is deleted and should be removed.
+	// It should not be run, but it is still in some P's heap.
+	timerDeleted
+
+	// The timer is being modified.
+	// The timer will only have this status briefly.
+	timerModifying
+
+	// The timer has been modified
+	// This concatenas the modifiedEarlier and modifiedLater cases
+	// from runtime
+	timerModified
+)
 
 // Interface to timers implemented in package runtime.
 // Must be in sync with ../runtime/time.go:/^type timer
 // Note : has been modified for the custom time lib
 type runtimeTimer struct {
 	when        int64
-	period      int64
 	f           func(interface{})
 	arg         interface{}
 	currentTime *Time
+	status      uint32
+}
+
+// Sleep pauses the current goroutine for at least the duration d.
+// A negative or zero duration causes Sleep to return immediately.
+func Sleep(d Duration) {
+	<-NewTimer(d).C
 }
 
 // when is a helper function for setting the 'when' field of a runtimeTimer.
@@ -52,18 +84,56 @@ func nanoToTime(t int64) Time {
 const maxWhen = 1<<63 - 1
 
 func startTimer(t *runtimeTimer) {
+	if t.status != timerNoStatus {
+		panic("startTimer called with initialized timer")
+	}
+	t.status = timerWaiting
 	go func() {
-		currentTime := runtimeNano()
-		for currentTime < t.when {
-			currentTime = runtimeNano()
+		for {
+			currentTime := runtimeNano()
+			switch t.status {
+			case timerWaiting:
+				fmt.Printf("timer: currentTime %d; when %d\n", currentTime, t.when)
+				if currentTime >= t.when {
+					fmt.Println("gotta run")
+					*t.currentTime = nanoToTime(currentTime)
+					t.status = timerRunning
+				}
+			case timerRunning:
+				t.f(t.arg)
+				t.status = timerDeleted
+			case timerDeleted:
+				fmt.Printf("timer finished: %d\n", currentTime)
+				return
+			case timerModifying:
+				for t.status == timerModifying {
+				}
+			default:
+				panic("bad timer")
+			}
 		}
-		*t.currentTime = nanoToTime(currentTime)
-		t.f(t.arg)
 	}()
 }
 
+// stopTimer stops a timer.
+// It reports whether t was stopped before being run.
 func stopTimer(t *runtimeTimer) bool {
-	return false
+	switch s := t.status; s {
+	case timerWaiting:
+		t.status = timerDeleted
+		return true
+	case timerNoStatus, timerDeleted:
+		return false
+	case timerRunning, timerModifying:
+		// Timer is being run or there is a simultaneous call to modTimer.
+		// We wait for those calls to end
+		for s == timerRunning || s == timerModifying {
+		}
+		t.status = timerDeleted
+		return true
+	default:
+		panic("bad timer")
+	}
 }
 
 // resettimer resets the time when a timer should fire.
@@ -72,12 +142,43 @@ func stopTimer(t *runtimeTimer) bool {
 // or may have been, used previously.
 // Reports whether the timer was modified before it was run.
 func resetTimer(t *runtimeTimer, when int64) bool {
-	//return modTimer(t, when, t.period, t.f, t.arg, t.seq)
-	return false
+	return modTimer(t, when, t.f, t.arg)
 }
 
-//func modTimer(t *runtimeTimer, when, period int64, f func(interface{}, uintptr), arg interface{}, seq uintptr) {
-//}
+// modtimer modifies an existing timer.
+// Reports whether the timer was modified before it was run.
+func modTimer(t *runtimeTimer, when int64, f func(interface{}), arg interface{}) bool {
+	if when < 0 {
+		when = maxWhen
+	}
+
+	var pending bool
+
+	switch s := t.status; s {
+	case timerWaiting:
+		t.status = timerDeleted
+		pending = true
+	case timerNoStatus, timerDeleted:
+		pending = false
+	case timerRunning, timerModifying:
+		for s == timerRunning || s == timerModifying {
+		}
+		pending = false
+	default:
+		panic("bad timer")
+	}
+
+	t.status = timerModifying
+
+	t.f = f
+	t.arg = arg
+	t.when = when
+
+	t.status = timerNoStatus
+	startTimer(t)
+
+	return pending
+}
 
 // The Timer type represents a single event.
 // When the Timer expires, the current time will be sent on C,
