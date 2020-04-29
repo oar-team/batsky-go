@@ -52,10 +52,7 @@ func Sleep(d Duration) {
 // If d is negative, it is ignored. If the returned value would be less than
 // zero because of an overflow, MaxInt64 is returned.
 func when(d Duration) int64 {
-	if d <= 0 {
-		return runtimeNano()
-	}
-	t := requester.RequestTimer(int64(d)) + int64(d)
+	t := requester.RequestTime(int64(d)) + int64(d)
 	if t < 0 {
 		t = 1<<63 - 1 // math.MaxInt64
 	}

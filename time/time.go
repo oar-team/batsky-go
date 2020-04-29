@@ -1023,7 +1023,7 @@ func daysIn(m Month, year int) int {
 
 // Provided by package runtime.
 func now() (sec int64, nsec int32, mono int64) {
-	t := requester.RequestTime()
+	t := requester.RequestTime(0)
 	return t / 1e9, int32(t % 1e9), t
 }
 
