@@ -33,8 +33,13 @@ type Message struct {
 var req = make(chan *Message)
 
 // The sync map and UUID system is here to sync requests with replies.
-// It is not necessary anymore : we need only to track the zmq requests with
-// a unique id for every message belonging to the same request.
+// It allows the broker to reply whenever he wants by storing the ids.
+//
+// It is not necessary anymore since the only reply we have is the current time,
+// for every request and every time.
+// We only need two res channels : one for the current request being processed,
+// one other is for the next request. That way we don't anwser to requests
+// ahead of time.
 var res = sync.Map{}
 
 var reqSocket *zmq.Socket
