@@ -58,5 +58,8 @@ should have been like that since the beginning.
 
 ### Requester inner mechanics
 
-TODO : requester pseudo algorithms
+##TODO
+- requester pseudo algorithms on this readme
+- better zmq exchanges
+- helper script and quick guide to change imports
 
