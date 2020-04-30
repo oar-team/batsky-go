@@ -5,17 +5,33 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
-	"time"
 
+	"github.com/google/uuid"
 	zmq "github.com/pebbe/zmq4"
 )
 
 // This code centralises the requests that have to be redirected to
 // batkube.
 
-var req = sync.Map{}
+type request struct {
+	data int64
+	uuid uuid.UUID
+}
+
+var req = make(chan *request)
+
+// res is a map[uuid](chan int64)
+//
+// The sync map and UUID system is here to sync requests with replies.
+// These uuid are not forwarded to the Broker.
+//
+// Some other technique have been tested to try to avoid the cost of
+// hashing keys and storing channels for every single requests, but failed.
+//
+// The uuid system is very secure because it syncs requests and replies one by one
+// without having to block any of the code to avoid sending to closed channels
+// and whatnot.
 var res = sync.Map{}
-var requestId = uint32(0)
 
 var reqSocket *zmq.Socket
 var handshakeSocket *zmq.Socket
@@ -37,14 +53,23 @@ func RequestTime(d int64) int64 {
 		go run()
 	}
 
-	currRequestId := requestId
-	resChan, _ := res.LoadOrStore(currRequestId, make(chan int64))
-	reqChan, _ := req.LoadOrStore(currRequestId, make(chan int64))
+	var m request
+	m.data = d
+	m.uuid = uuid.New()
 
-	reqChan.(chan int64) <- d
-	now := <-resChan.(chan int64)
+	_, ok := res.Load(m.uuid)
+	for ok {
+		// This would be very, very unlucky. Supposedly it will never ever happen.
+		fmt.Printf(fmt.Sprintf("Map entry already set for UUID %s. Generating a new one\n", m.uuid))
+		m.uuid = uuid.New()
+		_, ok = res.Load(m.uuid)
+	}
+	resChan := make(chan int64)
+	res.Store(m.uuid, resChan)
+
+	req <- &m
+	now := <-resChan
 	return now
-
 }
 
 func run() {
@@ -72,7 +97,7 @@ func run() {
 		// inverse the roles (the broker is the requester). This would
 		// result in a few more exchanges though to comply with the zmq
 		// protocol. Having two sockets allows to send two subsequent
-		// messages.
+		// messages, with both ends filling both roles.
 		readyBytes, _ := handshakeSocket.RecvBytes(0)
 		ready := string(readyBytes)
 		if ready != "ready" {
@@ -80,52 +105,31 @@ func run() {
 		}
 		handshakeSocket.SendBytes([]byte("ok"), 0)
 
-		resChan, _ := res.LoadOrStore(requestId, make(chan int64))
-		reqChan, _ := req.LoadOrStore(requestId, make(chan int64))
-		// The rest of the loop makes the assumption that every request from now on is made
-		// for requestId which may not be true.
-		// TODO : verify that
-		requests := make([]int64, 0)
-		// Using a range implies having to close req, which is prone to
-		// panics in this situation
+		// Using a range implies having to close req, which can't be done
+		// in this situation.
 		closeReq := false
-		reqNumber := 0
-		currRequestId := requestId
-		emptyReq := true
+		requests := make([]*request, 0)
+		timerRequests := make([]int64, 0)
 		for !closeReq {
 			select {
-			case d := <-reqChan.(chan int64):
-				reqNumber++
-				emptyReq = false
-				if d > 0 {
-					requests = append(requests, d)
+			case m := <-req:
+				requests = append(requests, m)
+				if m.data > 0 {
+					timerRequests = append(timerRequests, m.data)
 				}
 			default:
-				// this assumes there will be other calls. Can potentially deadlock
-				if reqNumber > 0 {
-					if currRequestId == requestId {
-						requestId++
-					} else {
-						// we make another round to make sure
-						// req is empty, but maybe it's not
-						// sufficient
-						closeReq = true
-						time.Sleep(10 * time.Millisecond)
-					}
-				} else if !emptyReq {
-					emptyReq = true
-					time.Sleep(10 * time.Millisecond)
-				} else {
+				if len(requests) > 0 {
 					closeReq = true
 				}
+				//closeReq = true
 			}
 		}
 
 		// ZMQ send and receive
 		// Probably there is something more efficient than json for this.
-		msg, err := json.Marshal(requests)
+		msg, err := json.Marshal(timerRequests)
 		if err != nil {
-			panic(fmt.Sprintf("Error marshaling message %v:", requests) + err.Error())
+			panic("Error marshaling message:" + err.Error())
 		}
 		_, err = reqSocket.SendBytes(msg, 0)
 		if err != nil {
@@ -137,12 +141,14 @@ func run() {
 			panic("Error receiving message:" + err.Error())
 		}
 		now := int64(binary.LittleEndian.Uint64(b))
-		//fmt.Printf("request id %d; nb %d; now %f\n", currRequestId, reqNumber, float64(now/1e6)/1e3)
 
 		// Send the replies
-		for i := 0; i < reqNumber; i++ {
+		for _, m := range requests {
+			resChan, ok := res.Load(m.uuid)
+			if !ok {
+				panic(fmt.Sprintf("Could not load channel %s from res map\n", m.uuid.String()[5:]))
+			}
 			resChan.(chan int64) <- now
 		}
-		//TODO : delete those channels?
 	}
 }
