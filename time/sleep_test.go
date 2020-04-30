@@ -449,6 +449,7 @@ func TestReset(t *testing.T) {
 	}
 	var err error
 	for _, d := range tries {
+		t.Log("trying with d", d)
 		err = testReset(d)
 		if err == nil {
 			t.Logf("passed using duration %v", d)

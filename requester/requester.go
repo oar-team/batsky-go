@@ -68,8 +68,7 @@ func RequestTime(d int64) int64 {
 	res.Store(m.uuid, resChan)
 
 	req <- &m
-	now := <-resChan
-	return now
+	return <-resChan
 }
 
 func run() {
@@ -118,10 +117,10 @@ func run() {
 					timerRequests = append(timerRequests, m.data)
 				}
 			default:
-				if len(requests) > 0 {
-					closeReq = true
-				}
-				//closeReq = true
+				//if len(requests) > 0 {
+				//	closeReq = true
+				//}
+				closeReq = true
 			}
 		}
 
