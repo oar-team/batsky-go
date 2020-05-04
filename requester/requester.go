@@ -14,8 +14,8 @@ import (
 // batkube.
 
 type request struct {
-	data int64
-	uuid uuid.UUID
+	duration int64
+	uuid     uuid.UUID
 }
 
 var req = make(chan *request)
@@ -53,7 +53,7 @@ func RequestTime(d int64) int64 {
 	}
 
 	var m request
-	m.data = d
+	m.duration = d
 	m.uuid = uuid.New()
 
 	_, ok := res.Load(m.uuid)
@@ -103,8 +103,8 @@ func run() {
 			select {
 			case m := <-req:
 				requests = append(requests, m)
-				if m.data > 0 {
-					timerRequests = append(timerRequests, m.data)
+				if m.duration > 0 {
+					timerRequests = append(timerRequests, m.duration)
 				}
 			default:
 				//if len(requests) > 0 {
