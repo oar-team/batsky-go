@@ -33,8 +33,7 @@ var req = make(chan *request)
 // and whatnot.
 var res = sync.Map{}
 
-var reqSocket *zmq.Socket
-var handshakeSocket *zmq.Socket
+var responder *zmq.Socket
 
 var running bool
 
@@ -78,31 +77,22 @@ func run() {
 	}
 	running = true
 
-	fmt.Println("Creating new handshake socket for time requests")
-	handshakeSocket, _ = zmq.NewSocket(zmq.REP)
-	handshakeSocket.Connect("tcp://127.0.0.1:27001")
-
-	fmt.Println("Creating new request socket for time requests")
-	reqSocket, _ = zmq.NewSocket(zmq.REQ)
-	reqSocket.Connect("tcp://127.0.0.1:27000")
+	fmt.Println("Creating new responder socket for time requests")
+	responder, _ = zmq.NewSocket(zmq.REP)
+	responder.Connect("tcp://127.0.0.1:27000")
+	defer responder.Close()
 
 	// This has to be a loop, otherwise not leaving any message behind
 	// becomes very tricky.
 	for {
 		// One solution to the sync problem with batkube.
-		// Requests are sent only when the broker makes us know it's ready.
-		//
-		// One other solution would be to keep only one socket and
-		// inverse the roles (the broker is the requester). This would
-		// result in a few more exchanges though to comply with the zmq
-		// protocol. Having two sockets allows to send two subsequent
-		// messages, with both ends filling both roles.
-		readyBytes, _ := handshakeSocket.RecvBytes(0)
+		// Batsim tells us when it's ready, so that we know when to
+		// consume messages from the req channel
+		readyBytes, _ := responder.RecvBytes(0)
 		ready := string(readyBytes)
 		if ready != "ready" {
 			panic(fmt.Sprintf("Failed handshake : Expected %s, got %s", "ready", ready))
 		}
-		handshakeSocket.SendBytes([]byte("ok"), 0)
 
 		// Using a range implies having to close req, which can't be done
 		// in this situation.
@@ -130,12 +120,12 @@ func run() {
 		if err != nil {
 			panic("Error marshaling message:" + err.Error())
 		}
-		_, err = reqSocket.SendBytes(msg, 0)
+		_, err = responder.SendBytes(msg, 0)
 		if err != nil {
 			panic("Error sending message: " + err.Error())
 		}
 
-		b, err := reqSocket.RecvBytes(0)
+		b, err := responder.RecvBytes(0)
 		if err != nil {
 			panic("Error receiving message:" + err.Error())
 		}
@@ -149,5 +139,7 @@ func run() {
 			}
 			resChan.(chan int64) <- now
 		}
+
+		_, err = responder.SendBytes([]byte("done"), 0)
 	}
 }
