@@ -21,23 +21,20 @@ non-zero duration parameter. Those requests are forwarded to Batsim in the form
 of a CALL_ME_LATER event which will be anwsered with a REQUESTED_CALL when the
 timer is supposed to fire.
 
-This is essential to the scheduler, otherwise it
-would have to wait for the next simulation event which would maybe not happen
-for a while (insumulation time) to get an update on the time and wake the
-timers up.
+This is essential to the scheduler, as otherwise it would have to wait for the
+next simulation event to get an update on the time and wake the timers up,
+which would maybe not happen for a while (in sumulation time).
 
 ### zmq exchanges breakdown
-One exchange starts of with a "handshake" initiated by the broker, which tells
-the requester it is ready to process the time requests. From there, the
-requester consumes all pending requests and forwards them to the broker.
+One exchange starts of with a "handshake" initiated by the broker (Batkube),
+which tells the requester (in the time package) it is ready to process the time
+requests. From there, the requester consumes all pending requests and forwards
+them to the broker.
 
 This allows requests from the scheduler to be taken into account while the
 requester is waiting for the borker to be able to receive the message. The
 pending requests would otherwise be sent on the next exchange, introducing a
 delay which could be harmful to the scheduler and the simulation in general.
-Other requests can still happen while the message is being processed to be
-sent over zmq but we can't do much about them : nothing tells us wether the
-shceduler will send other requests once we have consumed all pending requests.
 
 Whether the requester has to wait for any time requests to come up to even send
 a message to Batsim is a design decision we have to make.
@@ -45,16 +42,6 @@ a message to Batsim is a design decision we have to make.
 Here is a diagram to better illustrate those exchanges.
 
 ![requester - broker exchanges](imgs/requester-broker.png)
-
-Side note : it will be changed to have something like this:
-```
-<-ready
-[d, ...]->
-<-now
-->done
-```
-This will remove one socket on each side with the same amount of exchanges. It
-should have been like that since the beginning.
 
 ### Requester inner mechanics
 

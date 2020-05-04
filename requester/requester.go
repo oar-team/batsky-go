@@ -113,8 +113,11 @@ func run() {
 				closeReq = true
 			}
 		}
+		// Other requests between now and when we receive the time but
+		// we can't do much about them : nothing tells us wether the
+		// scheduler will send other requests once we have consumed all
+		// pending requests.
 
-		// ZMQ send and receive
 		// Probably there is something more efficient than json for this.
 		msg, err := json.Marshal(timerRequests)
 		if err != nil {
