@@ -84,20 +84,23 @@ func startTimer(t *runtimeTimer) {
 	go func() {
 		for {
 			currentTime := runtimeNano()
+			//fmt.Printf("when : %d, now: %d\n", t.when, currentTime)
 			switch t.status {
 			case timerWaiting:
+				//fmt.Println("timer waiting")
 				if currentTime >= t.when {
 					*t.currentTime = nanoToTime(currentTime)
 					t.status = timerRunning
 				}
 			case timerRunning:
+				//fmt.Println("timer running")
 				t.f(t.arg)
 				t.status = timerDeleted
 			case timerDeleted:
+				//fmt.Println("timer deleted")
 				return
 			case timerModifying:
-				for t.status == timerModifying {
-				}
+				// wait it out.
 			default:
 				panic("bad timer")
 			}
@@ -108,21 +111,27 @@ func startTimer(t *runtimeTimer) {
 // stopTimer stops a timer.
 // It reports whether t was stopped before being run.
 func stopTimer(t *runtimeTimer) bool {
-	switch s := t.status; s {
-	case timerWaiting:
-		t.status = timerDeleted
-		return true
-	case timerNoStatus, timerDeleted:
-		return false
-	case timerRunning, timerModifying:
-		// Timer is being run or there is a simultaneous call to modTimer.
-		// We wait for those calls to end
-		for s == timerRunning || s == timerModifying {
+	for {
+		switch t.status {
+		case timerWaiting:
+			t.status = timerDeleted
+			return true
+		case timerNoStatus, timerDeleted:
+			return false
+		case timerRunning, timerModifying:
+			// Timer is being run or there is a simultaneous call to modTimer.
+			// We wait for those calls to end
+			//
+			// There used to be a for loop here to wait out while
+			// the timer is running or modifying, however, it
+			// seemed to loop so fast the code was stuck in it
+			// despite having other routines that could change the
+			// status.
+			// The loop wasn't removed, instead it was moved higher up to give
+			// the other routines a chance to take over the process.
+		default:
+			panic("bad timer")
 		}
-		t.status = timerDeleted
-		return true
-	default:
-		panic("bad timer")
 	}
 }
 
@@ -138,24 +147,28 @@ func resetTimer(t *runtimeTimer, when int64) bool {
 // modtimer modifies an existing timer.
 // Reports whether the timer was modified before it was run.
 func modTimer(t *runtimeTimer, when int64, f func(interface{}), arg interface{}) bool {
+	//fmt.Println("mod timer")
 	if when < 0 {
 		when = maxWhen
 	}
 
 	var pending bool
 
-	switch s := t.status; s {
-	case timerWaiting:
-		t.status = timerDeleted
-		pending = true
-	case timerNoStatus, timerDeleted:
-		pending = false
-	case timerRunning, timerModifying:
-		for s == timerRunning || s == timerModifying {
+	var exit bool
+	for !exit {
+		switch t.status {
+		case timerWaiting:
+			t.status = timerDeleted
+			pending = true
+			exit = true
+		case timerNoStatus, timerDeleted:
+			pending = false
+			exit = true
+		case timerRunning, timerModifying:
+			// See stopTimer comment
+		default:
+			panic("bad timer")
 		}
-		pending = false
-	default:
-		panic("bad timer")
 	}
 
 	t.status = timerModifying
