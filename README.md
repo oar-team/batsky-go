@@ -44,9 +44,19 @@ Here is a diagram to better illustrate those exchanges.
 ![requester - broker exchanges](imgs/requester-broker.png)
 
 ### Requester inner mechanics
+`requester.go` is composed of two main functions :
+* The main loop `run` handles all requests, forwards them to Batkube and
+sends over the current simulation time to all callers of `RequestTime`. There
+can only be one running at a time.
+* `RequestTime` sends the requests to the main loop. There are multiple
+instances of these at a time, and calls to `RequestTime` are unpredictable.
 
-##TODO
-- requester pseudo algorithms on this readme
-- better zmq exchanges
-- helper script and quick guide to change imports
+Here is the main loop pseudo-algorithm : 
+![main loop](imgs/alg-req-loop.png)
+
+And here is how `RequestTime` unfolds :
+![request time](imgs/alg-now.png)
+
+## TODO
+- helper script to change imports with doc
 
