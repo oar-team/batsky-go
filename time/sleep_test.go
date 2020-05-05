@@ -22,19 +22,8 @@ func TestSleep(t *testing.T) {
 	d := 2 * Second
 	t.Log("now : ", Now())
 	t.Log("sleep for", d)
-	Sleep(2 * Second)
+	Sleep(d)
 	t.Log("now : ", Now())
-}
-
-func TestTimerStopTwice(t *testing.T) {
-	timer := NewTimer(100 * Second)
-	if !timer.Stop() {
-		t.Error("stop returned false")
-		<-timer.C
-	}
-	if timer.Stop() {
-		t.Error("stop returned true after second stop")
-	}
 }
 
 // From there, those are the tests from the real sleep_test.go
@@ -467,11 +456,13 @@ func TestOverflowSleep(t *testing.T) {
 	case <-After(big):
 		t.Fatalf("big timeout fired")
 	case <-After(25 * Millisecond):
+		t.Log("ok")
 		// OK
 	}
 	const neg = Duration(-1 << 63)
 	select {
 	case <-After(neg):
+		t.Log("ok2")
 		// OK
 	case <-After(1 * Second):
 		t.Fatalf("negative timeout didn't fire")
