@@ -1,4 +1,4 @@
-package requester
+package time
 
 import (
 	"encoding/binary"

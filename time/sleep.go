@@ -4,10 +4,6 @@
 
 package time
 
-import (
-	"github.com/oar-team/batsky-go/requester"
-)
-
 // Values for the timer status field.
 const (
 	// Timer has no status set yet.
@@ -55,7 +51,7 @@ func when(d Duration) int64 {
 	if d < 0 {
 		return runtimeNano()
 	}
-	t := requester.RequestTime(int64(d)) + int64(d)
+	t := RequestTime(int64(d)) + int64(d)
 	if t < 0 {
 		t = 1<<63 - 1 // math.MaxInt64
 	}
