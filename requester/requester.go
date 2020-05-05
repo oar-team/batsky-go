@@ -133,6 +133,10 @@ func run() {
 			panic("Error receiving message:" + err.Error())
 		}
 		now := int64(binary.LittleEndian.Uint64(b))
+		// overflow
+		if now < 0 {
+			now = 1<<63 - 1 // math.MaxInt64
+		}
 
 		// Send the replies
 		for _, m := range requests {

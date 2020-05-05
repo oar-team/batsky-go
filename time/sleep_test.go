@@ -26,7 +26,12 @@ func TestSleep(t *testing.T) {
 	t.Log("now : ", Now())
 }
 
-// From there, those are the tests from the real sleep_test.go
+// From there, those are the tests pasted from the real sleep_test.go
+// They will pass if the broker sends the time incrementaly, with
+// decent accuracy (~around 10ms steps).
+// They will fail with too broad leaps in time (50ms is already too much)
+// They will also fail if the broker reacts in a Batsim way (that is to say,
+// only increment to wake timers up).
 
 // Go runtime uses different Windows timers for time.Now and sleeping.
 // These can tick at different frequencies and can arrive out of sync.
