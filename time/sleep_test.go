@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -80,24 +81,24 @@ func TestAfterFunc(t *testing.T) {
 	<-c
 }
 
-//func TestAfterStress(t *testing.T) {
-//	stop := uint32(0)
-//	go func() {
-//		for atomic.LoadUint32(&stop) == 0 {
-//			runtime.GC()
-//			// Yield so that the OS can wake up the timer thread,
-//			// so that it can generate channel sends for the main goroutine,
-//			// which will eventually set stop = 1 for us.
-//			Sleep(Nanosecond)
-//		}
-//	}()
-//	ticker := NewTicker(1)
-//	for i := 0; i < 100; i++ {
-//		<-ticker.C
-//	}
-//	ticker.Stop()
-//	atomic.StoreUint32(&stop, 1)
-//}
+func TestAfterStress(t *testing.T) {
+	stop := uint32(0)
+	go func() {
+		for atomic.LoadUint32(&stop) == 0 {
+			runtime.GC()
+			// Yield so that the OS can wake up the timer thread,
+			// so that it can generate channel sends for the main goroutine,
+			// which will eventually set stop = 1 for us.
+			Sleep(Nanosecond)
+		}
+	}()
+	ticker := NewTicker(1)
+	for i := 0; i < 100; i++ {
+		<-ticker.C
+	}
+	ticker.Stop()
+	atomic.StoreUint32(&stop, 1)
+}
 
 func benchmark(b *testing.B, bench func(n int)) {
 
@@ -476,24 +477,24 @@ func TestOverflowSleep(t *testing.T) {
 
 // Test that a panic while deleting a timer does not leave
 // the timers mutex held, deadlocking a ticker.Stop in a defer.
-//func TestIssue5745(t *testing.T) {
-//	ticker := NewTicker(Hour)
-//	defer func() {
-//		// would deadlock here before the fix due to
-//		// lock taken before the segfault.
-//		ticker.Stop()
-//
-//		if r := recover(); r == nil {
-//			t.Error("Expected panic, but none happened.")
-//		}
-//	}()
-//
-//	// cause a panic due to a segfault
-//	var timer *Timer
-//	timer.Stop()
-//	t.Error("Should be unreachable.")
-//}
-//
+func TestIssue5745(t *testing.T) {
+	ticker := NewTicker(Hour)
+	defer func() {
+		// would deadlock here before the fix due to
+		// lock taken before the segfault.
+		ticker.Stop()
+
+		if r := recover(); r == nil {
+			t.Error("Expected panic, but none happened.")
+		}
+	}()
+
+	// cause a panic due to a segfault
+	var timer *Timer
+	timer.Stop()
+	t.Error("Should be unreachable.")
+}
+
 //func TestOverflowRuntimeTimer(t *testing.T) {
 //	if testing.Short() {
 //		t.Skip("skipping in short mode, see issue 6874")

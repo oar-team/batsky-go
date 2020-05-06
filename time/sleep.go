@@ -31,6 +31,7 @@ const (
 // Note : has been modified for the custom time lib
 type runtimeTimer struct {
 	when        int64
+	period      int64
 	f           func(interface{})
 	arg         interface{}
 	currentTime *Time
@@ -92,6 +93,15 @@ func startTimer(t *runtimeTimer) {
 				//fmt.Println("timer running")
 				t.f(t.arg)
 				t.status = timerDeleted
+				if t.period > 0 {
+					// TODO
+					// Does the ticker's when have to be
+					// (original when) modulo period?
+					// Note : It is the case if Batsim
+					// wakes this timer up at the right time
+					t.when = currentTime + t.period
+					t.status = timerWaiting
+				}
 			case timerDeleted:
 				//fmt.Println("timer deleted")
 				return
@@ -137,12 +147,12 @@ func stopTimer(t *runtimeTimer) bool {
 // or may have been, used previously.
 // Reports whether the timer was modified before it was run.
 func resetTimer(t *runtimeTimer, when int64) bool {
-	return modTimer(t, when, t.f, t.arg)
+	return modTimer(t, when, t.period, t.f, t.arg)
 }
 
 // modtimer modifies an existing timer.
 // Reports whether the timer was modified before it was run.
-func modTimer(t *runtimeTimer, when int64, f func(interface{}), arg interface{}) bool {
+func modTimer(t *runtimeTimer, when int64, period int64, f func(interface{}), arg interface{}) bool {
 	//fmt.Println("mod timer")
 	if when < 0 {
 		when = maxWhen
@@ -172,6 +182,7 @@ func modTimer(t *runtimeTimer, when int64, f func(interface{}), arg interface{})
 	t.f = f
 	t.arg = arg
 	t.when = when
+	t.period = period
 
 	t.status = timerNoStatus
 	startTimer(t)
