@@ -77,7 +77,7 @@ func startTimer(t *runtimeTimer) {
 			case timerWaiting:
 				//fmt.Println("timer waiting")
 				if currentTime >= t.when {
-					*t.currentTime = time.Date(0, 0, 0, 0, 0, 0, int(currentTime), time.UTC)
+					*t.currentTime = time.Unix(0, currentTime)
 					t.status = timerRunning
 				}
 			case timerRunning:

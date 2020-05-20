@@ -870,9 +870,9 @@ func Since(t Time) Duration {
 	var now Time
 	if t.wall&hasMonotonic != 0 {
 		// Common case optimization: if t has monotonic time, then Sub will use only it.
-		return Time{hasMonotonic, runtimeNano() - startNano, nil}.Sub(t)
+		now = Time{hasMonotonic, runtimeNano() - startNano, nil}
 	} else {
-		now = Date(0, 0, 0, 0, 0, 0, int(Now().UnixNano()), Local)
+		now = Unix(0, runtimeNano())
 	}
 	return now.Sub(t)
 }
@@ -885,7 +885,7 @@ func Until(t Time) Duration {
 		// Common case optimization: if t has monotonic time, then Sub will use only it.
 		now = Time{hasMonotonic, runtimeNano() - startNano, nil}
 	} else {
-		now = Date(0, 0, 0, 0, 0, 0, int(Now().UnixNano()), Local)
+		now = Unix(0, runtimeNano())
 	}
 	return t.Sub(now)
 }
@@ -1042,11 +1042,11 @@ var startNano int64 = runtimeNano() - 1
 
 // Now returns the current local time.
 func Now() time.Time {
-	sec, nsec, mono := now()
-	mono -= startNano
-	sec += unixToInternal - minWall
+	sec, nsec, _ := now()
+	//mono -= startNano
+	//sec += unixToInternal - minWall
 	// Little trick to return an actual time.Time
-	return time.Date(0, 0, 0, 0, 0, int(sec), int(nsec), time.UTC)
+	return time.Unix(sec, int64(nsec))
 }
 
 func unixTime(sec int64, nsec int32) Time {
