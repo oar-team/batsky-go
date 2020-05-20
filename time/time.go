@@ -77,6 +77,7 @@ package time
 
 import (
 	"errors"
+	"time"
 	_ "unsafe" // for go:linkname
 )
 
@@ -869,9 +870,9 @@ func Since(t Time) Duration {
 	var now Time
 	if t.wall&hasMonotonic != 0 {
 		// Common case optimization: if t has monotonic time, then Sub will use only it.
-		now = Time{hasMonotonic, runtimeNano() - startNano, nil}
+		return Time{hasMonotonic, runtimeNano() - startNano, nil}.Sub(t)
 	} else {
-		now = Now()
+		now = Date(0, 0, 0, 0, 0, 0, int(Now().UnixNano()), Local)
 	}
 	return now.Sub(t)
 }
@@ -884,7 +885,7 @@ func Until(t Time) Duration {
 		// Common case optimization: if t has monotonic time, then Sub will use only it.
 		now = Time{hasMonotonic, runtimeNano() - startNano, nil}
 	} else {
-		now = Now()
+		now = Date(0, 0, 0, 0, 0, 0, int(Now().UnixNano()), Local)
 	}
 	return t.Sub(now)
 }
@@ -1040,14 +1041,12 @@ func runtimeNano() int64 {
 var startNano int64 = runtimeNano() - 1
 
 // Now returns the current local time.
-func Now() Time {
+func Now() time.Time {
 	sec, nsec, mono := now()
 	mono -= startNano
 	sec += unixToInternal - minWall
-	if uint64(sec)>>33 != 0 {
-		return Time{uint64(nsec), sec + minWall, Local}
-	}
-	return Time{hasMonotonic | uint64(sec)<<nsecShift | uint64(nsec), mono, Local}
+	// Little trick to return an actual time.Time
+	return time.Date(0, 0, 0, 0, 0, int(sec), int(nsec), time.UTC)
 }
 
 func unixTime(sec int64, nsec int32) Time {

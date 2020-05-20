@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"runtime"
 	"testing"
+	"time"
 )
 
 func TestTicker(t *testing.T) {
@@ -17,7 +18,7 @@ func TestTicker(t *testing.T) {
 	// So only report an error if it fails five times in a row.
 
 	count := 10
-	delta := 20 * Millisecond
+	delta := 20 * time.Millisecond
 
 	// On Darwin ARM64 the tick frequency seems limited. Issue 35692.
 	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
@@ -27,7 +28,7 @@ func TestTicker(t *testing.T) {
 		// number to give the ticks more time to let the test pass.
 		// See CL 220638.
 		count = 6
-		delta = 100 * Millisecond
+		delta = 100 * time.Millisecond
 	}
 
 	var errs []string
@@ -50,7 +51,7 @@ func TestTicker(t *testing.T) {
 		ticker.Stop()
 		t1 := Now()
 		dt := t1.Sub(t0)
-		target := 3 * delta * Duration(count/2)
+		target := 3 * delta * time.Duration(count/2)
 		slop := target * 2 / 10
 		if dt < target-slop || dt > target+slop {
 			errs = append(errs, fmt.Sprintf("%d %s ticks took %s, expected [%s,%s]", count, delta, dt, target-slop, target+slop))
@@ -81,16 +82,16 @@ func TestTicker(t *testing.T) {
 
 // Issue 21874
 func TestTickerStopWithDirectInitialization(t *testing.T) {
-	c := make(chan Time)
+	c := make(chan time.Time)
 	tk := &Ticker{C: c}
 	tk.Stop()
 }
 
 // Test that a bug tearing down a ticker has been fixed. This routine should not deadlock.
 func TestTeardown(t *testing.T) {
-	Delta := 100 * Millisecond
+	Delta := 100 * time.Millisecond
 	if testing.Short() {
-		Delta = 20 * Millisecond
+		Delta = 20 * time.Millisecond
 	}
 	for i := 0; i < 3; i++ {
 		ticker := NewTicker(Delta)
@@ -119,7 +120,7 @@ func TestNewTickerLtZeroDuration(t *testing.T) {
 
 func BenchmarkTicker(b *testing.B) {
 	benchmark(b, func(n int) {
-		ticker := NewTicker(Nanosecond)
+		ticker := NewTicker(time.Nanosecond)
 		for i := 0; i < n; i++ {
 			<-ticker.C
 		}
@@ -129,9 +130,9 @@ func BenchmarkTicker(b *testing.B) {
 
 func BenchmarkTickerReset(b *testing.B) {
 	benchmark(b, func(n int) {
-		ticker := NewTicker(Nanosecond)
+		ticker := NewTicker(time.Nanosecond)
 		for i := 0; i < n; i++ {
-			ticker.Reset(Nanosecond * 2)
+			ticker.Reset(time.Nanosecond * 2)
 		}
 		ticker.Stop()
 	})
@@ -139,10 +140,10 @@ func BenchmarkTickerReset(b *testing.B) {
 
 func BenchmarkTickerResetNaive(b *testing.B) {
 	benchmark(b, func(n int) {
-		ticker := NewTicker(Nanosecond)
+		ticker := NewTicker(time.Nanosecond)
 		for i := 0; i < n; i++ {
 			ticker.Stop()
-			ticker = NewTicker(Nanosecond * 2)
+			ticker = NewTicker(time.Nanosecond * 2)
 		}
 		ticker.Stop()
 	})

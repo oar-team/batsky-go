@@ -12,15 +12,16 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestSimpleTimer(t *testing.T) {
-	timer := NewTimer(Second)
+	timer := NewTimer(time.Second)
 	t.Logf("Simple timer fired, %v\n", <-timer.C)
 }
 
 func TestSleep(t *testing.T) {
-	d := 2 * Second
+	d := 2 * time.Second
 	t.Log("now : ", Now())
 	t.Log("sleep for", d)
 	Sleep(d)
@@ -40,7 +41,7 @@ func TestSleep(t *testing.T) {
 // shorter then 100ms when measured as difference between time.Now before and
 // after time.Sleep call. This was observed on Windows XP SP3 (windows/386).
 // windowsInaccuracy is to ignore such errors.
-const windowsInaccuracy = 17 * Millisecond
+const windowsInaccuracy = 17 * time.Millisecond
 
 //func TestSleep(t *testing.T) {
 //	const delay = 100 * Millisecond
@@ -71,7 +72,7 @@ func TestAfterFunc(t *testing.T) {
 		i--
 		if i >= 0 {
 			AfterFunc(0, f)
-			Sleep(1 * Second)
+			Sleep(1 * time.Second)
 		} else {
 			c <- true
 		}
@@ -89,7 +90,7 @@ func TestAfterStress(t *testing.T) {
 			// Yield so that the OS can wake up the timer thread,
 			// so that it can generate channel sends for the main goroutine,
 			// which will eventually set stop = 1 for us.
-			Sleep(Nanosecond)
+			Sleep(time.Nanosecond)
 		}
 	}()
 	ticker := NewTicker(1)
@@ -112,7 +113,7 @@ func benchmark(b *testing.B, bench func(n int)) {
 			defer wg.Done()
 			garbage := make([]*Timer, 1<<15)
 			for j := range garbage {
-				garbage[j] = AfterFunc(Hour, nil)
+				garbage[j] = AfterFunc(time.Hour, nil)
 			}
 			garbageAll[i] = garbage
 		}(i)
@@ -163,7 +164,7 @@ func BenchmarkAfter(b *testing.B) {
 func BenchmarkStop(b *testing.B) {
 	benchmark(b, func(n int) {
 		for i := 0; i < n; i++ {
-			NewTimer(1 * Second).Stop()
+			NewTimer(1 * time.Second).Stop()
 		}
 	})
 }
@@ -183,7 +184,7 @@ func BenchmarkStartStop(b *testing.B) {
 	benchmark(b, func(n int) {
 		timers := make([]*Timer, n)
 		for i := 0; i < n; i++ {
-			timers[i] = AfterFunc(Hour, nil)
+			timers[i] = AfterFunc(time.Hour, nil)
 		}
 
 		for i := 0; i < n; i++ {
@@ -194,9 +195,9 @@ func BenchmarkStartStop(b *testing.B) {
 
 func BenchmarkReset(b *testing.B) {
 	benchmark(b, func(n int) {
-		t := NewTimer(Hour)
+		t := NewTimer(time.Hour)
 		for i := 0; i < n; i++ {
-			t.Reset(Hour)
+			t.Reset(time.Hour)
 		}
 		t.Stop()
 	})
@@ -208,7 +209,7 @@ func BenchmarkSleep(b *testing.B) {
 		wg.Add(n)
 		for i := 0; i < n; i++ {
 			go func() {
-				Sleep(Nanosecond)
+				Sleep(time.Nanosecond)
 				wg.Done()
 			}()
 		}
@@ -217,7 +218,7 @@ func BenchmarkSleep(b *testing.B) {
 }
 
 func TestAfter(t *testing.T) {
-	const delay = 100 * Millisecond
+	const delay = 100 * time.Millisecond
 	start := Now()
 	end := <-After(delay)
 	delayadj := delay
@@ -234,9 +235,9 @@ func TestAfter(t *testing.T) {
 
 func TestAfterTick(t *testing.T) {
 	const Count = 10
-	Delta := 100 * Millisecond
+	Delta := 100 * time.Millisecond
 	if testing.Short() {
-		Delta = 10 * Millisecond
+		Delta = 10 * time.Millisecond
 	}
 	t0 := Now()
 	for i := 0; i < Count; i++ {
@@ -268,11 +269,11 @@ func TestAfterStop(t *testing.T) {
 	}
 
 	for i := 0; i < 5; i++ {
-		AfterFunc(100*Millisecond, func() {})
-		t0 := NewTimer(50 * Millisecond)
+		AfterFunc(100*time.Millisecond, func() {})
+		t0 := NewTimer(50 * time.Millisecond)
 		c1 := make(chan bool, 1)
-		t1 := AfterFunc(150*Millisecond, func() { c1 <- true })
-		c2 := After(200 * Millisecond)
+		t1 := AfterFunc(150*time.Millisecond, func() { c1 <- true })
+		c2 := After(200 * time.Millisecond)
 		if !t0.Stop() {
 			errs = append(errs, "failed to stop event 0")
 			continue
@@ -315,7 +316,7 @@ func TestAfterQueuing(t *testing.T) {
 	const attempts = 5
 	err := errors.New("!=nil")
 	for i := 0; i < attempts && err != nil; i++ {
-		delta := Duration(20+i*50) * Millisecond
+		delta := time.Duration(20+i*50) * time.Millisecond
 		if err = testAfterQueuing(delta); err != nil {
 			t.Logf("attempt %v failed: %v", i, err)
 		}
@@ -329,14 +330,14 @@ var slots = []int{5, 3, 6, 6, 6, 1, 1, 2, 7, 9, 4, 8, 0}
 
 type afterResult struct {
 	slot int
-	t    Time
+	t    time.Time
 }
 
-func await(slot int, result chan<- afterResult, ac <-chan Time) {
+func await(slot int, result chan<- afterResult, ac <-chan time.Time) {
 	result <- afterResult{slot, <-ac}
 }
 
-func testAfterQueuing(delta Duration) error {
+func testAfterQueuing(delta time.Duration) error {
 	// make the result channel buffered because we don't want
 	// to depend on channel queueing semantics that might
 	// possibly change in the future.
@@ -344,10 +345,10 @@ func testAfterQueuing(delta Duration) error {
 
 	t0 := Now()
 	for _, slot := range slots {
-		go await(slot, result, After(Duration(slot)*delta))
+		go await(slot, result, After(time.Duration(slot)*delta))
 	}
 	var order []int
-	var times []Time
+	var times []time.Time
 	for range slots {
 		r := <-result
 		order = append(order, r.slot)
@@ -360,7 +361,7 @@ func testAfterQueuing(delta Duration) error {
 	}
 	for i, t := range times {
 		dt := t.Sub(t0)
-		target := Duration(order[i]) * delta
+		target := time.Duration(order[i]) * delta
 		if dt < target-delta/2 || dt > target+delta*10 {
 			return fmt.Errorf("After(%s) arrived at %s, expected [%s,%s]", target, dt, target-delta/2, target+delta*10)
 		}
@@ -374,14 +375,14 @@ func TestTimerStopStress(t *testing.T) {
 	}
 	for i := 0; i < 100; i++ {
 		go func(i int) {
-			timer := AfterFunc(2*Second, func() {
+			timer := AfterFunc(2*time.Second, func() {
 				t.Errorf("timer %d was not stopped", i)
 			})
-			Sleep(1 * Second)
+			Sleep(1 * time.Second)
 			timer.Stop()
 		}(i)
 	}
-	Sleep(3 * Second)
+	Sleep(3 * time.Second)
 }
 
 func TestSleepZeroDeadlock(t *testing.T) {
@@ -406,7 +407,7 @@ func TestSleepZeroDeadlock(t *testing.T) {
 	<-c
 }
 
-func testReset(d Duration) error {
+func testReset(d time.Duration) error {
 	t0 := NewTimer(2 * d)
 	Sleep(d)
 	if !t0.Reset(3 * d) {
@@ -425,7 +426,7 @@ func testReset(d Duration) error {
 		return errors.New("reset timer did not fire")
 	}
 
-	if t0.Reset(50 * Millisecond) {
+	if t0.Reset(50 * time.Millisecond) {
 		return errors.New("resetting expired timer returned true")
 	}
 	return nil
@@ -435,8 +436,8 @@ func TestReset(t *testing.T) {
 	// We try to run this test with increasingly larger multiples
 	// until one works so slow, loaded hardware isn't as flaky,
 	// but without slowing down fast machines unnecessarily.
-	const unit = 25 * Millisecond
-	tries := []Duration{
+	const unit = 25 * time.Millisecond
+	tries := []time.Duration{
 		1 * unit,
 		3 * unit,
 		7 * unit,
@@ -457,20 +458,20 @@ func TestReset(t *testing.T) {
 // Test that sleeping for an interval so large it overflows does not
 // result in a short sleep duration.
 func TestOverflowSleep(t *testing.T) {
-	const big = Duration(int64(1<<63 - 1))
+	const big = time.Duration(int64(1<<63 - 1))
 	select {
 	case <-After(big):
 		t.Fatalf("big timeout fired")
-	case <-After(25 * Millisecond):
+	case <-After(25 * time.Millisecond):
 		t.Log("ok")
 		// OK
 	}
-	const neg = Duration(-1 << 63)
+	const neg = time.Duration(-1 << 63)
 	select {
 	case <-After(neg):
 		t.Log("ok2")
 		// OK
-	case <-After(1 * Second):
+	case <-After(1 * time.Second):
 		t.Fatalf("negative timeout didn't fire")
 	}
 }
@@ -478,7 +479,7 @@ func TestOverflowSleep(t *testing.T) {
 // Test that a panic while deleting a timer does not leave
 // the timers mutex held, deadlocking a ticker.Stop in a defer.
 func TestIssue5745(t *testing.T) {
-	ticker := NewTicker(Hour)
+	ticker := NewTicker(time.Hour)
 	defer func() {
 		// would deadlock here before the fix due to
 		// lock taken before the segfault.

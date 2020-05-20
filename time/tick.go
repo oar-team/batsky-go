@@ -4,12 +4,15 @@
 
 package time
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 // A Ticker holds a channel that delivers `ticks' of a clock
 // at intervals.
 type Ticker struct {
-	C <-chan Time // The channel on which the ticks are delivered.
+	C <-chan time.Time // The channel on which the ticks are delivered.
 	r runtimeTimer
 }
 
@@ -18,14 +21,14 @@ type Ticker struct {
 // It adjusts the intervals or drops ticks to make up for slow receivers.
 // The duration d must be greater than zero; if not, NewTicker will panic.
 // Stop the ticker to release associated resources.
-func NewTicker(d Duration) *Ticker {
+func NewTicker(d time.Duration) *Ticker {
 	if d <= 0 {
 		panic(errors.New("non-positive interval for NewTicker"))
 	}
 	// Give the channel a 1-element time buffer.
 	// If the client falls behind while reading, we drop ticks
 	// on the floor until the client catches up.
-	c := make(chan Time, 1)
+	c := make(chan time.Time, 1)
 	t := &Ticker{
 		C: c,
 		r: runtimeTimer{
@@ -34,7 +37,7 @@ func NewTicker(d Duration) *Ticker {
 			f:      sendTime,
 		},
 	}
-	t.r.currentTime = &Time{}
+	t.r.currentTime = &time.Time{}
 	t.r.arg = sendTimeArgs{c, t.r.currentTime}
 	startTimer(&t.r)
 	return t
@@ -49,7 +52,7 @@ func (t *Ticker) Stop() {
 
 // Reset stops a ticker and resets its period to the specified duration.
 // The next tick will arrive after the new period elapses.
-func (t *Ticker) Reset(d Duration) {
+func (t *Ticker) Reset(d time.Duration) {
 	if t.r.f == nil {
 		panic("time: Reset called on uninitialized Ticker")
 	}
@@ -61,7 +64,7 @@ func (t *Ticker) Reset(d Duration) {
 // the Ticker, be aware that without a way to shut it down the underlying
 // Ticker cannot be recovered by the garbage collector; it "leaks".
 // Unlike NewTicker, Tick will return nil if d <= 0.
-func Tick(d Duration) <-chan Time {
+func Tick(d time.Duration) <-chan time.Time {
 	if d <= 0 {
 		return nil
 	}

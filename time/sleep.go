@@ -4,6 +4,8 @@
 
 package time
 
+import "time"
+
 // Values for the timer status field.
 const (
 	// Timer has no status set yet.
@@ -34,13 +36,13 @@ type runtimeTimer struct {
 	period      int64
 	f           func(interface{})
 	arg         interface{}
-	currentTime *Time
+	currentTime *time.Time
 	status      uint32
 }
 
 // Sleep pauses the current goroutine for at least the duration d.
 // A negative or zero duration causes Sleep to return immediately.
-func Sleep(d Duration) {
+func Sleep(d time.Duration) {
 	<-NewTimer(d).C
 }
 
@@ -48,7 +50,7 @@ func Sleep(d Duration) {
 // It returns what the time will be, in nanoseconds, Duration d in the future.
 // If d is negative, it is ignored. If the returned value would be less than
 // zero because of an overflow, MaxInt64 is returned.
-func when(d Duration) int64 {
+func when(d time.Duration) int64 {
 	if d < 0 {
 		return runtimeNano()
 	}
@@ -57,17 +59,6 @@ func when(d Duration) int64 {
 		t = 1<<63 - 1 // math.MaxInt64
 	}
 	return t
-}
-
-func nanoToTime(t int64) Time {
-	// This line must be synced with what now() returns
-	sec, nsec, mono := t/1e9, int32(t%1e9), t
-	mono -= startNano
-	sec += unixToInternal - minWall
-	if uint64(sec)>>33 != 0 {
-		return Time{uint64(nsec), sec + minWall, Local}
-	}
-	return Time{hasMonotonic | uint64(sec)<<nsecShift | uint64(nsec), mono, Local}
 }
 
 // maxWhen is the maximum value for timer's when field.
@@ -86,7 +77,7 @@ func startTimer(t *runtimeTimer) {
 			case timerWaiting:
 				//fmt.Println("timer waiting")
 				if currentTime >= t.when {
-					*t.currentTime = nanoToTime(currentTime)
+					*t.currentTime = time.Date(0, 0, 0, 0, 0, 0, int(currentTime), time.UTC)
 					t.status = timerRunning
 				}
 			case timerRunning:
@@ -195,7 +186,7 @@ func modTimer(t *runtimeTimer, when int64, period int64, f func(interface{}), ar
 // unless the Timer was created by AfterFunc.
 // A Timer must be created with NewTimer or AfterFunc.
 type Timer struct {
-	C <-chan Time
+	C <-chan time.Time
 	r runtimeTimer
 }
 
@@ -230,8 +221,8 @@ func (t *Timer) Stop() bool {
 
 // NewTimer creates a new Timer that will send
 // the current time on its channel after at least duration d.
-func NewTimer(d Duration) *Timer {
-	c := make(chan Time, 1)
+func NewTimer(d time.Duration) *Timer {
+	c := make(chan time.Time, 1)
 	t := &Timer{
 		C: c,
 		r: runtimeTimer{
@@ -239,7 +230,7 @@ func NewTimer(d Duration) *Timer {
 			f:    sendTime,
 		},
 	}
-	t.r.currentTime = &Time{}
+	t.r.currentTime = &time.Time{}
 	t.r.arg = sendTimeArgs{c, t.r.currentTime}
 	startTimer(&t.r)
 	return t
@@ -268,7 +259,7 @@ func NewTimer(d Duration) *Timer {
 // is a race condition between draining the channel and the new timer expiring.
 // Reset should always be invoked on stopped or expired channels, as described above.
 // The return value exists to preserve compatibility with existing programs.
-func (t *Timer) Reset(d Duration) bool {
+func (t *Timer) Reset(d time.Duration) bool {
 	if t.r.f == nil {
 		panic("time: Reset called on uninitialized Timer")
 	}
@@ -277,8 +268,8 @@ func (t *Timer) Reset(d Duration) bool {
 }
 
 type sendTimeArgs struct {
-	c chan Time
-	t *Time
+	c chan time.Time
+	t *time.Time
 }
 
 func sendTime(args interface{}) {
@@ -299,14 +290,14 @@ func sendTime(args interface{}) {
 // The underlying Timer is not recovered by the garbage collector
 // until the timer fires. If efficiency is a concern, use NewTimer
 // instead and call Timer.Stop if the timer is no longer needed.
-func After(d Duration) <-chan Time {
+func After(d time.Duration) <-chan time.Time {
 	return NewTimer(d).C
 }
 
 // AfterFunc waits for the duration to elapse and then calls f
 // in its own goroutine. It returns a Timer that can
 // be used to cancel the call using its Stop method.
-func AfterFunc(d Duration, f func()) *Timer {
+func AfterFunc(d time.Duration, f func()) *Timer {
 	t := &Timer{
 		r: runtimeTimer{
 			when: when(d),
@@ -314,7 +305,7 @@ func AfterFunc(d Duration, f func()) *Timer {
 			arg:  f,
 		},
 	}
-	t.r.currentTime = &Time{}
+	t.r.currentTime = &time.Time{}
 	startTimer(&t.r)
 	return t
 }
