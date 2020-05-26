@@ -7,31 +7,9 @@ It redirects all calls trying to get machine time to the Batkube message
 broker.
 
 ## Usage
-Simply replace the "time" import to this repo's time
-("github.com/oar-team/batsky-go/time") in any dependancy where you want to
-redirect time calls.
-
-For already established projects that you would like to fork in order to hijack
-the time, here are a few steps you can follow for projects using vgo (go.mod
-and gop.sum) :
-
-* Fork the repo, clone it, `cd` into it.
-* If you wish to change its name, you need to change the module's name in
-    go.mod but also in all internal imports to this module's packages.
-* Change "time" imports to this repository's time.
-* `go mod tidy`
-* `go get -u github.com/oar-team/batsky-go@master` to get the latest
-    commit (as this is yet a proof of concept, commits are not consistently
-    tagged).
-
-These forks were created with this intent and use batsky-go, you may change imports to these ones :
-* [batsky-apimachinery](https://github.com/oar-team/batsky-apimachinery)
-* [batsky-client-go](https://github.com/oar-team/batsky-client-go)
-
-Side notes : 
-- For now, relevant changes are on "batsky" branches, not master, so you have to `go get -u github.com/oar-team/package@batsky` to get the dependencies.
-- Replacing the official dependencies for the fork in the go.mod appears to be not possible at the moment (see [#26904](https://github.com/golang/go/issues/26904) issue on Go's repos) or bugged (the replace ignores the pinned version I want to give it). Imports have to be manually replaced.
-
+This library must be installed with
+https://github.com/oar-team/batsky-go-time-hijack-helper . The rest of the
+instructions are there.
 
 ## Principles
 All calls get piled up in requester.go and sent to Batkube whenever the broker
@@ -79,6 +57,10 @@ Here is the main loop pseudo-algorithm :
 And here is how `RequestTime` unfolds :
 ![request time](imgs/alg-now.png)
 
-## TODO
-- helper script to change imports with doc
+### Notes
+Debug messages are still present to aid with development. In a intent not to
+load this library with more dependencies, no logging tools are used which means
+debug messages are printed with fmt and no effort was made to manage some
+logging level.
 
+These messages will be removed in the future (and/or improved).

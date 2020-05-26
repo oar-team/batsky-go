@@ -77,9 +77,10 @@ func run() {
 	}
 	running = true
 
-	fmt.Println("Creating new responder socket for time requests")
+	sockAdress := "tcp://127.0.0.1:27000"
+	fmt.Println("Creating new responder socket for time requests on", sockAdress)
 	responder, _ = zmq.NewSocket(zmq.REP)
-	responder.Connect("tcp://127.0.0.1:27000")
+	responder.Connect(sockAdress)
 	defer responder.Close()
 
 	// This has to be a loop, otherwise not leaving any message behind
@@ -88,7 +89,9 @@ func run() {
 		// One solution to the sync problem with batkube.
 		// Batsim tells us when it's ready, so that we know when to
 		// consume messages from the req channel
+		fmt.Println("[batsky-go/time] Waiting for batkube ready signal")
 		readyBytes, _ := responder.RecvBytes(0)
+
 		ready := string(readyBytes)
 		if ready != "ready" {
 			panic(fmt.Sprintf("Failed handshake : Expected %s, got %s", "ready", ready))
@@ -123,6 +126,7 @@ func run() {
 		if err != nil {
 			panic("Error marshaling message:" + err.Error())
 		}
+		fmt.Printf("[batsky-go/time] Sending %v\n", timerRequests)
 		_, err = responder.SendBytes(msg, 0)
 		if err != nil {
 			panic("Error sending message: " + err.Error())
@@ -133,6 +137,7 @@ func run() {
 			panic("Error receiving message:" + err.Error())
 		}
 		now := int64(binary.LittleEndian.Uint64(b))
+		fmt.Printf("[batsky-go/time] Got now : %d\n", now)
 		// overflow
 		if now < 0 {
 			now = 1<<63 - 1 // math.MaxInt64
@@ -148,5 +153,6 @@ func run() {
 		}
 
 		_, err = responder.SendBytes([]byte("done"), 0)
+		fmt.Println("[batsky-go/time] Done signal sent")
 	}
 }
