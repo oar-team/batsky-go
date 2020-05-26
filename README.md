@@ -8,7 +8,7 @@ broker.
 
 ## Usage
 This library must be installed with
-https://github.com/oar-team/batsky-go-time-hijack-helper . The rest of the
+https://github.com/oar-team/batsky-go-installer . The rest of the
 instructions are there.
 
 ## Principles
