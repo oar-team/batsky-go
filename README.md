@@ -56,11 +56,3 @@ Here is the main loop pseudo-algorithm :
 
 And here is how `RequestTime` unfolds :
 ![request time](imgs/alg-now.png)
-
-### Notes
-Debug messages are still present to aid with development. In a intent not to
-load this library with more dependencies, no logging tools are used which means
-debug messages are printed with fmt and no effort was made to manage some
-logging level.
-
-These messages will be removed in the future (and/or improved).

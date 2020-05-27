@@ -77,19 +77,28 @@ func run() {
 	}
 	running = true
 
-	sockAdress := "tcp://127.0.0.1:27000"
-	fmt.Println("Creating new responder socket for time requests on", sockAdress)
-	responder, _ = zmq.NewSocket(zmq.REP)
-	responder.Connect(sockAdress)
-	defer responder.Close()
+	sockEndpoint := "tcp://127.0.0.1:27000"
+	fmt.Println("Creating new responder socket for time requests on", sockEndpoint)
+	responder, err := zmq.NewSocket(zmq.REP)
+	if err != nil {
+		panic(err)
+	}
+	if err = responder.Connect(sockEndpoint); err != nil {
+		panic(err)
+	}
+	defer func() {
+		if err = responder.Close(); err != nil {
+			fmt.Println("Error while closing responder socket :", err)
+		}
+		if err = zmq.Term(); err != nil {
+			panic(err)
+		}
+	}()
 
-	// This has to be a loop, otherwise not leaving any message behind
-	// becomes very tricky.
 	for {
 		// One solution to the sync problem with batkube.
 		// Batsim tells us when it's ready, so that we know when to
 		// consume messages from the req channel
-		fmt.Println("[batsky-go/time] Waiting for batkube ready signal")
 		readyBytes, _ := responder.RecvBytes(0)
 
 		ready := string(readyBytes)
@@ -99,6 +108,7 @@ func run() {
 
 		// Using a range implies having to close req, which can't be done
 		// in this situation.
+		// Instead we just consume every object that is currently in req.
 		closeReq := false
 		requests := make([]*request, 0)
 		timerRequests := make([]int64, 0)
@@ -126,7 +136,6 @@ func run() {
 		if err != nil {
 			panic("Error marshaling message:" + err.Error())
 		}
-		fmt.Printf("[batsky-go/time] Sending %v\n", timerRequests)
 		_, err = responder.SendBytes(msg, 0)
 		if err != nil {
 			panic("Error sending message: " + err.Error())
@@ -137,7 +146,6 @@ func run() {
 			panic("Error receiving message:" + err.Error())
 		}
 		now := int64(binary.LittleEndian.Uint64(b))
-		fmt.Printf("[batsky-go/time] Got now : %d\n", now)
 		// overflow
 		if now < 0 {
 			now = 1<<63 - 1 // math.MaxInt64
@@ -153,6 +161,5 @@ func run() {
 		}
 
 		_, err = responder.SendBytes([]byte("done"), 0)
-		fmt.Println("[batsky-go/time] Done signal sent")
 	}
 }
