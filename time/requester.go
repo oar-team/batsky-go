@@ -83,7 +83,7 @@ func run() {
 	if err != nil {
 		panic(err)
 	}
-	if err = responder.Connect(sockEndpoint); err != nil {
+	if err = responder.Bind(sockEndpoint); err != nil {
 		panic(err)
 	}
 	defer func() {
