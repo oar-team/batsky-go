@@ -21,23 +21,14 @@ non-zero duration parameter. Those requests are forwarded to Batsim in the form
 of a CALL_ME_LATER event which will be anwsered with a REQUESTED_CALL when the
 timer is supposed to fire.
 
-This is essential to the scheduler, as otherwise it would have to wait for the
-next simulation event to get an update on the time and wake the timers up,
-which would maybe not happen for a while (in sumulation time).
-
 ### zmq exchanges breakdown
 One exchange starts of with a "handshake" initiated by the broker (Batkube),
 which tells the requester (in the time package) it is ready to process the time
-requests. From there, the requester consumes all pending requests and forwards
-them to the broker.
+requests. From there, the requester consumes all pending requests from the
+scheduler and forwards them to the broker.
 
-This allows requests from the scheduler to be taken into account while the
-requester is waiting for the borker to be able to receive the message. The
-pending requests would otherwise be sent on the next exchange, introducing a
-delay which could be harmful to the scheduler and the simulation in general.
-
-Whether the requester has to wait for any time requests to come up to even send
-a message to Batsim is a design decision we have to make.
+If the requester has nothing to forward to Batkube, an empty message is sent
+anyways so as not to slow down the simulation.
 
 Here is a diagram to better illustrate those exchanges.
 
@@ -45,11 +36,11 @@ Here is a diagram to better illustrate those exchanges.
 
 ### Requester inner mechanics
 `requester.go` is composed of two main functions :
-* The main loop `run` handles all requests, forwards them to Batkube and
-sends over the current simulation time to all callers of `RequestTime`. There
-can only be one running at a time.
 * `RequestTime` sends the requests to the main loop. There are multiple
-instances of these at a time, and calls to `RequestTime` are unpredictable.
+instances of these at a time. Calls to `RequestTime` are unpredictable, and
+untracable (to the best of our knowledge).
+* The main loop `run` handles all requests, forwards them to Batkube and
+sends over the current simulation time to all callers of `RequestTime`.
 
 Here is the main loop pseudo-algorithm : 
 ![main loop](imgs/alg-req-loop.png)
